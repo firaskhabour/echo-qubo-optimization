@@ -1,0 +1,61 @@
+#config.yaml
+version: "v1.0"
+description: "Synthetic health insurance optimization experiment"
+
+population:
+  num_members: 20000
+  coverage_months: 12
+
+age_distribution:
+  pediatric:
+    min_age: 0
+    max_age: 17
+    share: 0.20
+  adult:
+    min_age: 18
+    max_age: 64
+    share: 0.60
+  senior:
+    min_age: 65
+    max_age: 90
+    share: 0.20
+
+regions: [R1, R2, R3]
+
+risk_score:
+  distribution: lognormal
+  mean: 0.0
+  sigma: 0.8
+
+claims_frequency:
+  base_lambda: 6.0 
+
+claims_severity:
+  distribution: lognormal
+  sigma: 1.2
+  mean_amount: 1200.0
+
+features:
+  total_features: 200
+  N_default: 200
+
+regulation:
+  regulatory_share: 0.15
+
+# Controls used by generate_data.py (master instance generation)
+qubo_generation:
+  regulatory_share: 0.15
+
+  # --- IMPORTANT: scale feature costs to be comparable to premium bands ---
+  c_lognormal_mean: 0.0
+  c_lognormal_sigma: 0.75
+  c_scale: 300.0
+
+  # --- Sigma (risk/covariance) generation ---
+  sigma_rank: 20
+  sigma_noise: 0.001
+  sigma_normalize_diag: true
+  sigma_scale: 1.0
+
+notes:
+  random_seeds_policy: "Seeds are controlled by config/experiment_plan.yaml and run_experiments.py"

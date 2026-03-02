@@ -1,0 +1,24 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE
+.vscode/
+.idea/
+
+# Results and data (optional: decide carefully)
+results/
+data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large QUBO files
+*.npz

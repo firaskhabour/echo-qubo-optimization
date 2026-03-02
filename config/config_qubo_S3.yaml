@@ -1,0 +1,37 @@
+scenario:
+  id: 3
+  name: S3_tight_regulation
+data:
+  seed: 1000
+features:
+  N: 20
+pricing:
+  premium_bands:
+  - 1200
+  - 1400
+  - 1500
+  - 1800
+  - 2000
+deductibles:
+  deductible_bands:
+  - 0
+  - 150
+  - 300
+  - 600
+risk:
+  lambda_risk: 0.0
+regulation:
+  regulatory_share: 0.15
+  Rmin_share_baseline: 0.6
+  Rmin_share_tight: 0.85
+  use_tight: true
+affordability:
+  enabled: false
+  disallow_premium_bands:
+  - 4
+  - 5
+  disallow_penalty_multiplier: 100.0
+penalties:
+  scale_factor: 10.0
+  onehot_multiplier: 0.5
+  reg_multiplier: 1.0

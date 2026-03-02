@@ -1,0 +1,68 @@
+# config/experiment_plan.yaml
+# Experiment plan for Use Case 1 (Appendix A aligned, EJOR-focused)
+
+feature_sizes:
+  - 20
+  - 30
+  - 40
+  - 50
+  - 60
+  - 100
+  - 150
+  - 200
+  - 300
+
+
+# Seeds policy:
+# - Core regime (N <= 50): 20 seeds
+# - Stress regime (60, 100): 10 seeds
+# - Extended stress regime (>=150): 5 seeds (sufficient to show scaling onset)
+seeds:
+  core_count: 20
+  stress_count: 10
+  extended_stress_count: 5
+
+  core_seed_start: 1000
+  stress_seed_start: 2000
+  extended_stress_seed_start: 3000
+
+scenarios:
+  - 1
+  - 2
+  - 3
+  - 4
+
+solver:
+  # SA parameters (fixed compute budget for fair scaling)
+  sa_steps: 40000
+  sa_T0: 5.0
+  sa_Tend: 0.01
+
+  # multistart budgets
+  greedy_num_starts: 20
+
+  # FAIRNESS: SA multistart matches greedy
+  sa_multistart: true
+  sa_num_starts: 20
+
+gurobi_policy:
+  # Documented here for Section 3 (run_experiments uses CLI args)
+  run_if_N_leq: 200
+  time_limit_sec: 3600
+  mip_gap: 0.0
+  quiet: true
+
+notes:
+  purpose: "Single-run hybrid experiment (microdata-derived c and Sigma; QUBO consistent across solvers)."
+  seed_generation: "Seed folders are generated once per seed at N_required=max(feature_sizes) for that regime."
+  reproducibility: "All solver budgets are fixed across N; Gurobi uses time-limit and reports incumbent gap."
+
+extended_exactness:
+  enabled: true
+  scenarios: [1, 4]          # recommended: S1 + S4; or [1] only
+  feature_sizes: [150, 200, 300]
+  seed_regime: stress        # stress seeds start at stress_seed_start (e.g., 2000)
+  seed_count: 3              # 3–5 is enough
+  gurobi_time_limit: 7200    # 2 hours
+  gurobi_mip_gap: 0.0
+  gurobi_quiet: true
