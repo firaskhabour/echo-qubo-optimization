@@ -107,9 +107,9 @@ def analyze_spectrum(Q: np.ndarray, verbose: bool = False) -> Dict[str, float]:
 def estimate_initial_smoothing(Q_base: np.ndarray, Q_penalties: np.ndarray,
                                 percentile: float = 0.25) -> float:
     """
-    Estimate initial smoothing parameter λ₀.
+    Estimate initial smoothing parameter τ₀.
     
-    Strategy: Set λ₀ to percentile of eigenvalue range of Q_penalties.
+    Strategy: Set τ₀ to percentile of eigenvalue range of Q_penalties.
     This ensures significant smoothing at t=0.
     
     Args:
@@ -118,21 +118,21 @@ def estimate_initial_smoothing(Q_base: np.ndarray, Q_penalties: np.ndarray,
         percentile: Percentile of eigenvalue range (0.25 = 25%)
     
     Returns:
-        λ₀ smoothing parameter
+        τ₀ smoothing parameter
     """
     try:
         # Analyze penalty matrix spectrum
         eigs_pen = np.linalg.eigvalsh(Q_penalties)
         eig_range = np.max(eigs_pen) - np.min(eigs_pen)
         
-        # Set λ₀ to percentile of range
-        lambda_0 = percentile * eig_range
+        # Set τ₀ to percentile of range
+        tau0 = percentile * eig_range
         
         # Ensure reasonable bounds
-        lambda_0 = max(lambda_0, 100.0)  # Minimum smoothing
-        lambda_0 = min(lambda_0, 1e6)    # Maximum smoothing
+        tau0 = max(tau0, 100.0)  # Minimum smoothing
+        tau0 = min(tau0, 1e6)    # Maximum smoothing
         
-        return float(lambda_0)
+        return float(tau0)
         
     except:
         # Fallback
@@ -142,7 +142,7 @@ def estimate_initial_smoothing(Q_base: np.ndarray, Q_penalties: np.ndarray,
 def compute_adaptive_stages(
     Q_base: np.ndarray,
     Q_penalties: np.ndarray,
-    lambda_0: float,
+    tau0: float,
     max_stages: int = 8,
     verbose: bool = False
 ) -> List[float]:
@@ -168,12 +168,12 @@ def compute_adaptive_stages(
     spectra = []
     for t in candidates:
         # Build Q(t) with smoothing
-        lambda_t = lambda_0 * (1 - t) ** 2
+        tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
         
         # Add smoothing
-        if lambda_t > 1e-8:
-            Q_t = Q_t + lambda_t * np.eye(Q_t.shape[0])
+        if tau_t > 1e-8:
+            Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
         
         # Analyze spectrum
         spec = analyze_spectrum(Q_t, verbose=False)
@@ -212,7 +212,7 @@ def allocate_budget_by_roughness(
     stages: List[float],
     Q_base: np.ndarray,
     Q_penalties: np.ndarray,
-    lambda_0: float,
+    tau0: float,
     total_budget: int,
     verbose: bool = False
 ) -> List[int]:
@@ -231,10 +231,10 @@ def allocate_budget_by_roughness(
     
     for t in stages:
         # Build Q(t)
-        lambda_t = lambda_0 * (1 - t) ** 2
+        tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
-        if lambda_t > 1e-8:
-            Q_t = Q_t + lambda_t * np.eye(Q_t.shape[0])
+        if tau_t > 1e-8:
+            Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
         
         # Analyze spectrum
         spec = analyze_spectrum(Q_t, verbose=False)
@@ -501,23 +501,23 @@ def spectral_landscape_navigation(
         print("-"*70)
     
     # Estimate initial smoothing
-    lambda_0 = estimate_initial_smoothing(
+    tau0 = estimate_initial_smoothing(
         Q_base, Q_penalties, params['smoothing_percentile']
     )
     
     if verbose:
-        print(f"  Initial smoothing λ₀: {lambda_0:.1e}")
+        print(f"  Initial smoothing τ₀: {tau0:.1e}")
     
     # Compute adaptive stages
     stages = compute_adaptive_stages(
-        Q_base, Q_penalties, lambda_0,
+        Q_base, Q_penalties, tau0,
         max_stages=params['max_stages'],
         verbose=verbose
     )
     
     # Allocate budget
     budgets = allocate_budget_by_roughness(
-        stages, Q_base, Q_penalties, lambda_0,
+        stages, Q_base, Q_penalties, tau0,
         params['total_budget'],
         verbose=verbose
     )
@@ -527,21 +527,21 @@ def spectral_landscape_navigation(
         print()
         print("  Spectral analysis at each stage:")
         print("  " + "-"*66)
-        print(f"  {'Stage':<8} {'t':<6} {'λ(t)':<12} {'Cond':<12} {'Neg':<6} {'Rough':<12}")
+        print(f"  {'Stage':<8} {'t':<6} {'τ(t)':<12} {'Cond':<12} {'Neg':<6} {'Rough':<12}")
         print("  " + "-"*66)
     
     spectra = []
     for i, t in enumerate(stages):
-        lambda_t = lambda_0 * (1 - t) ** 2
+        tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
-        if lambda_t > 1e-8:
-            Q_t = Q_t + lambda_t * np.eye(Q_t.shape[0])
+        if tau_t > 1e-8:
+            Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
         
         spec = analyze_spectrum(Q_t, verbose=False)
         spectra.append(spec)
         
         if verbose:
-            print(f"  {i:<8} {t:<6.2f} {lambda_t:<12.1e} "
+            print(f"  {i:<8} {t:<6.2f} {tau_t:<12.1e} "
                   f"{spec['condition_number']:<12.1e} "
                   f"{spec['negative_count']:<6} "
                   f"{spec['roughness']:<12.1e}")
@@ -574,13 +574,13 @@ def spectral_landscape_navigation(
         )
         
         # Build Q(t) with adaptive smoothing
-        lambda_t = lambda_0 * (1 - t) ** 2
+        tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
-        if lambda_t > 1e-8:
-            Q_t = Q_t + lambda_t * np.eye(Q_t.shape[0])
+        if tau_t > 1e-8:
+            Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
         
         if verbose:
-            print(f"\n[Stage {stage_idx}] t={t:.2f}, λ={lambda_t:.1e}, beam={beam}")
+            print(f"\n[Stage {stage_idx}] t={t:.2f}, λ={tau_t:.1e}, beam={beam}")
             print(f"  Budget: {budget:,} steps")
             print(f"  Condition: {spectrum['condition_number']:.1e}")
         
@@ -685,7 +685,7 @@ def spectral_landscape_navigation(
         'energy': final_energy,
         'best_stage': best_overall_stage,
         'runtime': runtime,
-        'lambda_0': lambda_0,
+        'tau0': tau0,
         'stages': stages,
         'budgets': budgets,
         'spectra': spectra,

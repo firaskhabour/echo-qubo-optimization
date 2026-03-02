@@ -711,8 +711,8 @@ def main():
         "energy_greedy": float(e_greedy),
         "energy_sa_best": float(e_sa),
 
-        "raw_objective_greedy": float(greedy_pack["raw_objective"]),
-        "raw_objective_sa_best": float(sa_pack["raw_objective"]),
+        "objective_raw_greedy": float(greedy_pack["raw_objective"]),
+        "objective_raw_sa_best": float(sa_pack["raw_objective"]),
 
         # Runtime tracking for H2 (EJOR critical)
         "greedy_runtime_sec": float(greedy_runtime_sec),
@@ -755,11 +755,11 @@ def main():
 
     if sa_multistart and sa_num_starts > 1:
         conv = out["solvers"]["sa"]["params"]["convergence"]
-        print(f"SA(best of {sa_num_starts}) energy:           {out['energy_sa_best']:.6f} | raw={out['raw_objective_sa_best']:.6f} | time={sa_runtime_sec:.3f}s")
+        print(f"SA(best of {sa_num_starts}) energy:           {out['energy_sa_best']:.6f} | raw={out['objective_raw_sa_best']:.6f} | time={sa_runtime_sec:.3f}s")
         print(f"  Convergence: best found at {conv['best_found_at_step']}/{steps} steps ({conv['convergence_fraction']:.1%})")
     else:
         conv = out["solvers"]["sa"]["params"]["convergence"]
-        print(f"SA(single run) energy:                        {out['energy_sa_best']:.6f} | raw={out['raw_objective_sa_best']:.6f} | time={sa_runtime_sec:.3f}s")
+        print(f"SA(single run) energy:                        {out['energy_sa_best']:.6f} | raw={out['objective_raw_sa_best']:.6f} | time={sa_runtime_sec:.3f}s")
         print(f"  Convergence: best found at {conv['best_found_at_step']}/{steps} steps ({conv['convergence_fraction']:.1%})")
 
     gp = out["solvers"]["greedy"]["penalty_energy"]

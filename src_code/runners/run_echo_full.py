@@ -338,7 +338,7 @@ def run_echo_on_instance(seed, scenario_id, N, data_dir, baseline_row, verbose=F
         'echo_selected_reg_features_count': echo_eval['selected_reg_features_count'],
         
         # ECHO algorithm details
-        'echo_lambda_0': result['lambda_0'],
+        'echo_tau0': result['tau0'],
         'echo_num_stages': len(result['stages']),
         'echo_best_stage': result['best_stage'],
         'echo_steps_used': result['steps_used'],
