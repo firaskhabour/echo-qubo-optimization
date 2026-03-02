@@ -751,7 +751,7 @@ def main():
     print(f"Loaded {scenario_name} | seed={SEED} | N={N} M={M} K={K} | n={n_total} | L={L}")
     print(f"Used QUBO: {Q_path.name}")
 
-    print(f"Greedy(best of {num_starts_greedy}) energy: {out['energy_greedy']:.6f} | raw={out['raw_objective_greedy']:.6f} | time={greedy_runtime_sec:.3f}s")
+    print(f"Greedy(best of {num_starts_greedy}) energy: {out['energy_greedy']:.6f} | raw={out['objective_raw_greedy']:.6f} | time={greedy_runtime_sec:.3f}s")
 
     if sa_multistart and sa_num_starts > 1:
         conv = out["solvers"]["sa"]["params"]["convergence"]

@@ -486,7 +486,7 @@ def spectral_landscape_navigation(
     
     if verbose:
         print("="*70)
-        print("SPECTRAL LANDSCAPE NAVIGATION (SLN)")
+        print("ECHO OPTIMIZER (Eigenvalue-guided Constrained Homotopy Optimization)")
         print("="*70)
         print(f"Problem: N={N}, M={M}, K={K}, L={L}")
         print(f"Penalty weights: w_oh={w_oh:.1e}, w_reg={w_reg:.1e}, w_aff={w_aff:.1e}")
@@ -690,7 +690,7 @@ def spectral_landscape_navigation(
         'budgets': budgets,
         'spectra': spectra,
         'steps_used': steps_used,
-        'method': 'SLN',
+        'method': 'ECHO',
     }
 
 
@@ -798,3 +798,6 @@ def get_default_SLN_parameters() -> Dict[str, Any]:
         'T0': 5.0,
         'Tend': 0.01,
     }
+
+def echo_optimize(*args, **kwargs):
+    return spectral_landscape_navigation(*args, **kwargs)

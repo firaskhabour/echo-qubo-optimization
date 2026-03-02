@@ -2,7 +2,7 @@
 PROJECT DUMP (TREE + SELECTED CONTENT)
 ==============================================================================================================
 Root:      C:\Users\HP\insurance-quantum
-Generated: 2026-03-02 04:39:51.360788
+Generated: 2026-03-02 11:17:21.238433
 Content export:
   - .py/.yaml/.yml full content
   - CSV header only for CSV under results/
@@ -31,7 +31,7 @@ insurance-quantum/
 │           └── regulatory_set.csv
 │           JSON files (count=33, example=gurobi_exact_S1_cost_only_N20.json)
 │           NPZ files (count=17, example=qubo_Q_S1_cost_only_N20.npz)
-│       └── (other seeds) seed_1001, seed_1002, ..., seed_2009
+│           └── (other seeds) seed_1001, seed_1002, ..., seed_9999
 ├── results/
 │   ├── baseline_full_results.csv
 │   ├── echo_full_results.csv
@@ -56,7 +56,35 @@ insurance-quantum/
 │       ├── __init__.py
 │       └── extract_parameters.py
 ├── venv/
-
+├── xsrc/
+│   ├── analyze_results.py
+│   ├── audit_solution.py
+│   ├── build_qubo High Panelty.py
+│   ├── build_qubo.py
+│   ├── check_npz.py
+│   ├── check_qubo.py
+│   ├── cleanup_ramp_up.py
+│   ├── extract_parameters.py
+│   ├── generate_data.py
+│   ├── generate_qubos_10x.py
+│   ├── generate_seeds_batch.py
+│   ├── make_section_6.py
+│   ├── preflight_validation.py
+│   ├── refactor_to_src_code.py
+│   ├── run_experiments.py
+│   ├── run_sho_experiments.py
+│   ├── run_sho_on_10x_qubos.py
+│   ├── run_sln_experiments.py
+│   ├── run_sln_full.py
+│   ├── Sanity.py
+│   ├── sho_metrics.py
+│   ├── solve_classical.py
+│   ├── solve_qubo_gurobi_exact.py
+│   ├── spectral_homotopy_optimization copy.py
+│   ├── spectral_homotopy_optimization.py
+│   └── spectral_landscape_navigation.py
+├── .gitignore
+└── extract_code.py
 
 ==============================================================================================================
 
@@ -682,7 +710,7 @@ CSV HEADER ONLY:
 ##############################################################################################################
 
 CSV HEADER ONLY:
-scenario_id,scenario_name,seed,N,M,K,L,echo_raw_objective,echo_energy,echo_feasible,echo_runtime_sec,echo_chosen_premium_band,echo_chosen_deductible_band,echo_selected_features_count,echo_selected_reg_features_count,echo_lambda_0,echo_num_stages,echo_best_stage,echo_steps_used,echo_final_condition_number,echo_final_negative_eigs,echo_final_roughness,sa_raw_objective,sa_energy,sa_feasible,sa_runtime_sec,greedy_raw_objective,greedy_energy,greedy_feasible,gurobi_ran,gurobi_raw_objective,gurobi_energy,gurobi_feasible,gurobi_status,gap_echo_to_sa,gap_echo_to_greedy,gap_echo_to_gurobi,echo_beats_sa,echo_ties_sa,echo_loses_sa,echo_beats_greedy,echo_ties_greedy,echo_beats_gurobi,echo_ties_gurobi,echo_loses_gurobi,w_onehot,w_reg,w_aff
+scenario_id,scenario_name,seed,N,M,K,L,echo_raw_objective,echo_energy,echo_feasible,echo_runtime_sec,echo_chosen_premium_band,echo_chosen_deductible_band,echo_selected_features_count,echo_selected_reg_features_count,echo_tau0,echo_num_stages,echo_best_stage,echo_steps_used,echo_final_condition_number,echo_final_negative_eigs,echo_final_roughness,sa_raw_objective,sa_energy,sa_feasible,sa_runtime_sec,greedy_raw_objective,greedy_energy,greedy_feasible,gurobi_ran,gurobi_raw_objective,gurobi_energy,gurobi_feasible,gurobi_status,gap_echo_to_sa,gap_echo_to_greedy,gap_echo_to_gurobi,echo_beats_sa,echo_ties_sa,echo_loses_sa,echo_beats_greedy,echo_ties_greedy,echo_beats_gurobi,echo_ties_gurobi,echo_loses_gurobi,w_onehot,w_reg,w_aff
 
 ##############################################################################################################
 # FILE: results\results_master.csv
@@ -2709,7 +2737,7 @@ from tqdm import tqdm
 import sys
 
 # Add src_code to path
-sys.path.insert(0, 'src_code')
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Import ECHO
 from solvers.echo_optimizer import spectral_landscape_navigation  # noqa: F401
@@ -3017,7 +3045,7 @@ def run_echo_on_instance(seed, scenario_id, N, data_dir, baseline_row, verbose=F
         'echo_selected_reg_features_count': echo_eval['selected_reg_features_count'],
         
         # ECHO algorithm details
-        'echo_lambda_0': result['lambda_0'],
+        'echo_tau0': result['tau0'],
         'echo_num_stages': len(result['stages']),
         'echo_best_stage': result['best_stage'],
         'echo_steps_used': result['steps_used'],
@@ -3263,7 +3291,7 @@ Key Innovations:
 4. Dynamic smoothing parameter adjustment
 
 Usage:
-    from solvers.echo_optimizer from solvers import echo_optimizer  # noqa: F401
+    from solvers.echo_optimizer in solvers import echo_optimizer  # noqa: F401
     
     result = spectral_landscape_navigation(
         Q_base, Q_oh, Q_reg, Q_aff,
@@ -3359,9 +3387,9 @@ def analyze_spectrum(Q: np.ndarray, verbose: bool = False) -> Dict[str, float]:
 def estimate_initial_smoothing(Q_base: np.ndarray, Q_penalties: np.ndarray,
                                 percentile: float = 0.25) -> float:
     """
-    Estimate initial smoothing parameter λ₀.
+    Estimate initial smoothing parameter τ₀.
     
-    Strategy: Set λ₀ to percentile of eigenvalue range of Q_penalties.
+    Strategy: Set τ₀ to percentile of eigenvalue range of Q_penalties.
     This ensures significant smoothing at t=0.
     
     Args:
@@ -3370,21 +3398,21 @@ def estimate_initial_smoothing(Q_base: np.ndarray, Q_penalties: np.ndarray,
         percentile: Percentile of eigenvalue range (0.25 = 25%)
     
     Returns:
-        λ₀ smoothing parameter
+        τ₀ smoothing parameter
     """
     try:
         # Analyze penalty matrix spectrum
         eigs_pen = np.linalg.eigvalsh(Q_penalties)
         eig_range = np.max(eigs_pen) - np.min(eigs_pen)
         
-        # Set λ₀ to percentile of range
-        lambda_0 = percentile * eig_range
+        # Set τ₀ to percentile of range
+        tau0 = percentile * eig_range
         
         # Ensure reasonable bounds
-        lambda_0 = max(lambda_0, 100.0)  # Minimum smoothing
-        lambda_0 = min(lambda_0, 1e6)    # Maximum smoothing
+        tau0 = max(tau0, 100.0)  # Minimum smoothing
+        tau0 = min(tau0, 1e6)    # Maximum smoothing
         
-        return float(lambda_0)
+        return float(tau0)
         
     except:
         # Fallback
@@ -3394,7 +3422,7 @@ def estimate_initial_smoothing(Q_base: np.ndarray, Q_penalties: np.ndarray,
 def compute_adaptive_stages(
     Q_base: np.ndarray,
     Q_penalties: np.ndarray,
-    lambda_0: float,
+    tau0: float,
     max_stages: int = 8,
     verbose: bool = False
 ) -> List[float]:
@@ -3420,12 +3448,12 @@ def compute_adaptive_stages(
     spectra = []
     for t in candidates:
         # Build Q(t) with smoothing
-        lambda_t = lambda_0 * (1 - t) ** 2
+        tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
         
         # Add smoothing
-        if lambda_t > 1e-8:
-            Q_t = Q_t + lambda_t * np.eye(Q_t.shape[0])
+        if tau_t > 1e-8:
+            Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
         
         # Analyze spectrum
         spec = analyze_spectrum(Q_t, verbose=False)
@@ -3464,7 +3492,7 @@ def allocate_budget_by_roughness(
     stages: List[float],
     Q_base: np.ndarray,
     Q_penalties: np.ndarray,
-    lambda_0: float,
+    tau0: float,
     total_budget: int,
     verbose: bool = False
 ) -> List[int]:
@@ -3483,10 +3511,10 @@ def allocate_budget_by_roughness(
     
     for t in stages:
         # Build Q(t)
-        lambda_t = lambda_0 * (1 - t) ** 2
+        tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
-        if lambda_t > 1e-8:
-            Q_t = Q_t + lambda_t * np.eye(Q_t.shape[0])
+        if tau_t > 1e-8:
+            Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
         
         # Analyze spectrum
         spec = analyze_spectrum(Q_t, verbose=False)
@@ -3738,7 +3766,7 @@ def spectral_landscape_navigation(
     
     if verbose:
         print("="*70)
-        print("SPECTRAL LANDSCAPE NAVIGATION (SLN)")
+        print("ECHO OPTIMIZER (Eigenvalue-guided Constrained Homotopy Optimization)")
         print("="*70)
         print(f"Problem: N={N}, M={M}, K={K}, L={L}")
         print(f"Penalty weights: w_oh={w_oh:.1e}, w_reg={w_reg:.1e}, w_aff={w_aff:.1e}")
@@ -3753,23 +3781,23 @@ def spectral_landscape_navigation(
         print("-"*70)
     
     # Estimate initial smoothing
-    lambda_0 = estimate_initial_smoothing(
+    tau0 = estimate_initial_smoothing(
         Q_base, Q_penalties, params['smoothing_percentile']
     )
     
     if verbose:
-        print(f"  Initial smoothing λ₀: {lambda_0:.1e}")
+        print(f"  Initial smoothing τ₀: {tau0:.1e}")
     
     # Compute adaptive stages
     stages = compute_adaptive_stages(
-        Q_base, Q_penalties, lambda_0,
+        Q_base, Q_penalties, tau0,
         max_stages=params['max_stages'],
         verbose=verbose
     )
     
     # Allocate budget
     budgets = allocate_budget_by_roughness(
-        stages, Q_base, Q_penalties, lambda_0,
+        stages, Q_base, Q_penalties, tau0,
         params['total_budget'],
         verbose=verbose
     )
@@ -3779,21 +3807,21 @@ def spectral_landscape_navigation(
         print()
         print("  Spectral analysis at each stage:")
         print("  " + "-"*66)
-        print(f"  {'Stage':<8} {'t':<6} {'λ(t)':<12} {'Cond':<12} {'Neg':<6} {'Rough':<12}")
+        print(f"  {'Stage':<8} {'t':<6} {'τ(t)':<12} {'Cond':<12} {'Neg':<6} {'Rough':<12}")
         print("  " + "-"*66)
     
     spectra = []
     for i, t in enumerate(stages):
-        lambda_t = lambda_0 * (1 - t) ** 2
+        tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
-        if lambda_t > 1e-8:
-            Q_t = Q_t + lambda_t * np.eye(Q_t.shape[0])
+        if tau_t > 1e-8:
+            Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
         
         spec = analyze_spectrum(Q_t, verbose=False)
         spectra.append(spec)
         
         if verbose:
-            print(f"  {i:<8} {t:<6.2f} {lambda_t:<12.1e} "
+            print(f"  {i:<8} {t:<6.2f} {tau_t:<12.1e} "
                   f"{spec['condition_number']:<12.1e} "
                   f"{spec['negative_count']:<6} "
                   f"{spec['roughness']:<12.1e}")
@@ -3826,13 +3854,13 @@ def spectral_landscape_navigation(
         )
         
         # Build Q(t) with adaptive smoothing
-        lambda_t = lambda_0 * (1 - t) ** 2
+        tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
-        if lambda_t > 1e-8:
-            Q_t = Q_t + lambda_t * np.eye(Q_t.shape[0])
+        if tau_t > 1e-8:
+            Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
         
         if verbose:
-            print(f"\n[Stage {stage_idx}] t={t:.2f}, λ={lambda_t:.1e}, beam={beam}")
+            print(f"\n[Stage {stage_idx}] t={t:.2f}, λ={tau_t:.1e}, beam={beam}")
             print(f"  Budget: {budget:,} steps")
             print(f"  Condition: {spectrum['condition_number']:.1e}")
         
@@ -3937,12 +3965,12 @@ def spectral_landscape_navigation(
         'energy': final_energy,
         'best_stage': best_overall_stage,
         'runtime': runtime,
-        'lambda_0': lambda_0,
+        'tau0': tau0,
         'stages': stages,
         'budgets': budgets,
         'spectra': spectra,
         'steps_used': steps_used,
-        'method': 'SLN',
+        'method': 'ECHO',
     }
 
 
@@ -4050,6 +4078,9 @@ def get_default_SLN_parameters() -> Dict[str, Any]:
         'T0': 5.0,
         'Tend': 0.01,
     }
+
+def echo_optimize(*args, **kwargs):
+    return spectral_landscape_navigation(*args, **kwargs)
 
 ##############################################################################################################
 # FILE: src_code\solvers\solve_classical.py
@@ -4768,8 +4799,8 @@ def main():
         "energy_greedy": float(e_greedy),
         "energy_sa_best": float(e_sa),
 
-        "raw_objective_greedy": float(greedy_pack["raw_objective"]),
-        "raw_objective_sa_best": float(sa_pack["raw_objective"]),
+        "objective_raw_greedy": float(greedy_pack["raw_objective"]),
+        "objective_raw_sa_best": float(sa_pack["raw_objective"]),
 
         # Runtime tracking for H2 (EJOR critical)
         "greedy_runtime_sec": float(greedy_runtime_sec),
@@ -4808,15 +4839,15 @@ def main():
     print(f"Loaded {scenario_name} | seed={SEED} | N={N} M={M} K={K} | n={n_total} | L={L}")
     print(f"Used QUBO: {Q_path.name}")
 
-    print(f"Greedy(best of {num_starts_greedy}) energy: {out['energy_greedy']:.6f} | raw={out['raw_objective_greedy']:.6f} | time={greedy_runtime_sec:.3f}s")
+    print(f"Greedy(best of {num_starts_greedy}) energy: {out['energy_greedy']:.6f} | raw={out['objective_raw_greedy']:.6f} | time={greedy_runtime_sec:.3f}s")
 
     if sa_multistart and sa_num_starts > 1:
         conv = out["solvers"]["sa"]["params"]["convergence"]
-        print(f"SA(best of {sa_num_starts}) energy:           {out['energy_sa_best']:.6f} | raw={out['raw_objective_sa_best']:.6f} | time={sa_runtime_sec:.3f}s")
+        print(f"SA(best of {sa_num_starts}) energy:           {out['energy_sa_best']:.6f} | raw={out['objective_raw_sa_best']:.6f} | time={sa_runtime_sec:.3f}s")
         print(f"  Convergence: best found at {conv['best_found_at_step']}/{steps} steps ({conv['convergence_fraction']:.1%})")
     else:
         conv = out["solvers"]["sa"]["params"]["convergence"]
-        print(f"SA(single run) energy:                        {out['energy_sa_best']:.6f} | raw={out['raw_objective_sa_best']:.6f} | time={sa_runtime_sec:.3f}s")
+        print(f"SA(single run) energy:                        {out['energy_sa_best']:.6f} | raw={out['objective_raw_sa_best']:.6f} | time={sa_runtime_sec:.3f}s")
         print(f"  Convergence: best found at {conv['best_found_at_step']}/{steps} steps ({conv['convergence_fraction']:.1%})")
 
     gp = out["solvers"]["greedy"]["penalty_energy"]
@@ -4838,7 +4869,7 @@ if __name__ == "__main__":
 # FILE: src_code\solvers\solve_qubo_gurobi_exact.py
 ##############################################################################################################
 
-# src_code/solver/solve_qubo_gurobi_exact.py
+# src_code/solvers/solve_qubo_gurobi_exact.py
 import argparse
 import json
 import time
