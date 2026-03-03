@@ -1,26 +1,38 @@
+# src_code/solvers/echo_optimizer.py
 """
-Spectral Landscape Navigation (SLN) for QUBO Optimization
+ECHO: Eigenvalue-guided Constrained Homotopy Optimization
 ==========================================================
+Implements the ECHO algorithm described in Section 3 of the accompanying paper.
 
-Novel eigenvalue-guided adaptive homotopy optimization.
+ECHO improves solution quality over multistart SA under an identical fixed
+evaluation budget (B_total = 800,000) by introducing three spectral adaptations
+derived solely from the QUBO matrix (Section 3.11):
 
-Key Innovations:
-1. Adaptive stage selection based on spectral landscape analysis
-2. Roughness-aware budget allocation (spend more in ill-conditioned regions)
-3. Condition-number-guided beam sizing
-4. Dynamic smoothing parameter adjustment
+  1. Spectral initialization of τ₀ from the eigenvalue range of Q^(pen)
+     (Section 3.5).
+  2. Eigenvalue-driven stage selection based on spectral change across
+     t ∈ [0, 1] (Section 3.6).
+  3. Condition number guided beam sizing to preserve diversity in
+     ill-conditioned regions (Section 3.9).
 
-Usage:
-    from solvers.echo_optimizer in solvers import echo_optimizer  # noqa: F401
-    
-    result = spectral_landscape_navigation(
-        Q_base, Q_oh, Q_reg, Q_aff,
-        w_oh, w_reg, w_aff,
-        N, M, K, L,
-        seed=1000
-    )
+ECHO uses no gradients, no surrogate models, and no learning components.
+All adaptation is computed from spectral properties of staged matrices Q(t).
 
-Author: Advanced QUBO Optimization Framework
+Homotopy family (Section 3.4):
+
+    Q(t) = Q^(obj) + t·Q^(pen) + τ(t)·I,    τ(t) = τ₀(1−t)²
+
+where Q^(obj) = Q_base and Q^(pen) = w_oh·Q_oh + w_reg·Q_reg + w_aff·Q_aff.
+At t = 1: τ(1) = 0 and Q(1) = Q, the original target QUBO.
+
+Variable ordering (inherited from build_qubo.py, Section 2):
+    v = [x_1 ... x_N | y_1 ... y_M | z_1 ... z_K | t_0 ... t_{L-1}]
+
+Entry point:
+    spectral_landscape_navigation(Q_base, Q_oh, Q_reg, Q_aff,
+                                   N, M, K, L,
+                                   w_oh, w_reg, w_aff,
+                                   seed=1000)
 """
 
 import numpy as np
@@ -28,52 +40,49 @@ import time
 from typing import Dict, List, Tuple, Callable, Any
 
 
-# ============================================================================
-# PHASE 1: SPECTRAL ANALYSIS
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Spectral analysis
+# ---------------------------------------------------------------------------
 
 def analyze_spectrum(Q: np.ndarray, verbose: bool = False) -> Dict[str, float]:
     """
-    Analyze eigenvalue spectrum of QUBO matrix.
-    
-    Returns metrics about landscape structure:
-    - Condition number (numerical stability)
-    - Spectral gap (separation of eigenvalues)
-    - Negative eigenvalue count (non-convexity)
-    - Roughness estimate (variability in spectrum)
+    Compute spectral diagnostics for a symmetric QUBO matrix.
+
+    Used at each candidate stage point t to characterize the landscape of
+    Q(t). The diagnostics drive stage selection (Section 3.6), budget
+    allocation (Section 3.7), and beam sizing (Section 3.9).
+
+    Returns a dict with:
+        condition_number  -- κ(Q): max|λ| / min|λ| over nonzero eigenvalues
+        spectral_gap      -- λ_max − λ_{n-1} (gap at the top of the spectrum)
+        negative_count    -- n_neg: number of eigenvalues below −ε
+        effective_rank    -- number of eigenvalues with |λ| > 10⁻⁶
+        roughness         -- std(eigenvalues): landscape variability proxy
+        eig_max, eig_min  -- largest and smallest eigenvalues
     """
     try:
-        # Compute eigenvalues (symmetric matrix)
         eigs = np.linalg.eigvalsh(Q)
-        
-        # Filter near-zero eigenvalues
+
         EPSILON = 1e-10
         nonzero_eigs = eigs[np.abs(eigs) > EPSILON]
-        
-        # Condition number
+
         if len(nonzero_eigs) > 0:
             max_abs = np.max(np.abs(nonzero_eigs))
             min_abs = np.min(np.abs(nonzero_eigs))
             condition = max_abs / max(min_abs, EPSILON)
         else:
             condition = 1.0
-        
-        # Spectral gap (gap between largest and second-largest eigenvalues)
-        if len(eigs) >= 2:
-            sorted_eigs = np.sort(eigs)
-            spectral_gap = sorted_eigs[-1] - sorted_eigs[-2]
-        else:
-            spectral_gap = 0.0
-        
-        # Count negative eigenvalues (indicates non-convex regions)
+
+        spectral_gap = float(eigs[-1] - eigs[-2]) if len(eigs) >= 2 else 0.0
+
+        # Negative eigenvalue count: indicates non-convex landscape regions
         negative_count = int(np.sum(eigs < -EPSILON))
-        
-        # Effective rank (number of significant eigenvalues)
+
         effective_rank = int(np.sum(np.abs(eigs) > 1e-6))
-        
-        # Roughness: standard deviation of eigenvalues (landscape variability)
+
+        # Roughness proxy: eigenvalue standard deviation (Section 3.6)
         roughness = float(np.std(eigs))
-        
+
         spectrum = {
             'condition_number': float(condition),
             'spectral_gap': float(spectral_gap),
@@ -83,16 +92,15 @@ def analyze_spectrum(Q: np.ndarray, verbose: bool = False) -> Dict[str, float]:
             'eig_max': float(np.max(eigs)),
             'eig_min': float(np.min(eigs)),
         }
-        
+
         if verbose:
             print(f"    Condition: {condition:.1e}, Neg: {negative_count}, "
                   f"Rough: {roughness:.1e}")
-        
+
         return spectrum
-        
+
     except np.linalg.LinAlgError as e:
-        print(f"Warning: Eigenvalue computation failed: {e}")
-        # Return default values
+        print(f"Warning: eigenvalue computation failed: {e}")
         return {
             'condition_number': 1e6,
             'spectral_gap': 0.0,
@@ -107,35 +115,28 @@ def analyze_spectrum(Q: np.ndarray, verbose: bool = False) -> Dict[str, float]:
 def estimate_initial_smoothing(Q_base: np.ndarray, Q_penalties: np.ndarray,
                                 percentile: float = 0.25) -> float:
     """
-    Estimate initial smoothing parameter τ₀.
-    
-    Strategy: Set τ₀ to percentile of eigenvalue range of Q_penalties.
-    This ensures significant smoothing at t=0.
-    
-    Args:
-        Q_base: Base objective matrix
-        Q_penalties: Combined penalty matrix
-        percentile: Percentile of eigenvalue range (0.25 = 25%)
-    
-    Returns:
-        τ₀ smoothing parameter
+    Compute the initial smoothing parameter τ₀ from the penalty spectrum.
+
+    Implements Section 3.5:
+
+        τ₀ = percentile × (μ_max − μ_min)
+
+    where μ_max and μ_min are the maximum and minimum eigenvalues of Q^(pen),
+    and percentile = 0.25 by default. τ₀ is clamped to [100, 10⁶]:
+
+        τ₀ ← max(τ₀, 100),   τ₀ ← min(τ₀, 10⁶)
+
+    This anchors smoothing intensity to the penalty spectrum and prevents
+    degenerate values at both small- and large-scale instances.
     """
     try:
-        # Analyze penalty matrix spectrum
         eigs_pen = np.linalg.eigvalsh(Q_penalties)
-        eig_range = np.max(eigs_pen) - np.min(eigs_pen)
-        
-        # Set τ₀ to percentile of range
+        eig_range = float(np.max(eigs_pen) - np.min(eigs_pen))
         tau0 = percentile * eig_range
-        
-        # Ensure reasonable bounds
-        tau0 = max(tau0, 100.0)  # Minimum smoothing
-        tau0 = min(tau0, 1e6)    # Maximum smoothing
-        
+        tau0 = max(tau0, 100.0)
+        tau0 = min(tau0, 1e6)
         return float(tau0)
-        
-    except:
-        # Fallback
+    except Exception:
         return 1000.0
 
 
@@ -147,64 +148,55 @@ def compute_adaptive_stages(
     verbose: bool = False
 ) -> List[float]:
     """
-    Compute adaptive stage points based on spectral landscape analysis.
-    
-    Strategy:
-    - Sample t ∈ [0, 1] at fine resolution
-    - Compute spectrum at each t
-    - Place stages where spectrum changes most rapidly
-    - Always include t=0 and t=1
-    
-    Returns:
-        List of t values (sorted, including 0 and 1)
+    Select homotopy stage points by spectral change (Section 3.6).
+
+    Samples 51 candidate values uniformly on [0, 1]. For each candidate t,
+    forms Q(t) = Q_base + t·Q_penalties + τ₀(1−t)²·I and computes spectral
+    diagnostics. Consecutive-point spectral change scores are then computed as:
+
+        Δ(t_i) = |κ(t_i) − κ(t_{i-1})| / κ(t_{i-1})
+                + |ρ(t_i) − ρ(t_{i-1})| / ρ(t_{i-1})
+
+    The (max_stages − 2) candidate points with the largest Δ are selected as
+    intermediate stages. Endpoints t = 0 and t = 1 are always included.
+    Duplicate values are removed.
+
+    Returns a sorted list of stage t-values with |S| ≤ max_stages.
     """
     if verbose:
         print("  Analyzing spectral landscape...")
-    
-    # Sample many candidate t values
+
     n_samples = 51
     candidates = np.linspace(0, 1, n_samples)
-    
+
     spectra = []
     for t in candidates:
-        # Build Q(t) with smoothing
         tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
-        
-        # Add smoothing
         if tau_t > 1e-8:
             Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
-        
-        # Analyze spectrum
-        spec = analyze_spectrum(Q_t, verbose=False)
-        spectra.append(spec)
-    
-    # Compute spectral change between consecutive points
+        spectra.append(analyze_spectrum(Q_t, verbose=False))
+
+    # Spectral change score between consecutive candidate points
     changes = []
     for i in range(1, len(spectra)):
-        # Measure magnitude of spectral change
         delta = (
-            abs(spectra[i]['condition_number'] - spectra[i-1]['condition_number']) / 
+            abs(spectra[i]['condition_number'] - spectra[i-1]['condition_number']) /
             max(spectra[i-1]['condition_number'], 1.0) +
             abs(spectra[i]['roughness'] - spectra[i-1]['roughness']) /
             max(spectra[i-1]['roughness'], 1.0)
         )
         changes.append((candidates[i], delta))
-    
-    # Sort by change magnitude
+
     changes.sort(key=lambda x: x[1], reverse=True)
-    
-    # Select points with largest spectral changes
-    # But ensure we don't have too many stages
-    selected = [t for t, _ in changes[:max_stages-2]]
-    
-    # Always include endpoints
-    stages = [0.0] + selected + [1.0]
-    stages = sorted(list(set(stages)))  # Remove duplicates and sort
-    
+    selected = [t for t, _ in changes[:max_stages - 2]]
+
+    # Always include endpoints; remove duplicates
+    stages = sorted(set([0.0] + selected + [1.0]))
+
     if verbose:
         print(f"  Selected {len(stages)} adaptive stages: {[f'{t:.2f}' for t in stages]}")
-    
+
     return stages
 
 
@@ -217,63 +209,61 @@ def allocate_budget_by_roughness(
     verbose: bool = False
 ) -> List[int]:
     """
-    Allocate computational budget based on landscape roughness.
-    
-    Strategy:
-    - Rough regions (high condition number, many negative eigenvalues) get more budget
-    - Smooth regions get less budget
-    - Ensures we spend time where problem is hard
-    
-    Returns:
-        Budget allocation for each stage (sums to total_budget)
+    Allocate the total evaluation budget across stages by roughness score
+    (Section 3.7).
+
+    For each stage t_s, the roughness score is:
+
+        r_s = κ(Q(t_s)) × √(n_neg(Q(t_s)) + 1)
+
+    Stage budgets are assigned proportionally:
+
+        B_s = ⌊(r_s / Σ r_j) × B_total⌋
+
+    with a minimum of B_s ≥ 5,000. If the minimum constraint causes the sum
+    to exceed B_total, budgets are rescaled. The remainder from integer
+    division is added to the final stage so that Σ B_s = B_total.
+
+    Note: within each stage, SA assigns per-restart and per-candidate steps
+    via integer division, so the executed iteration count can be marginally
+    below the allocated stage budget. This is conservative and cannot
+    artificially inflate ECHO's evaluation count.
     """
     roughness_scores = []
-    
     for t in stages:
-        # Build Q(t)
         tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
         if tau_t > 1e-8:
             Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
-        
-        # Analyze spectrum
         spec = analyze_spectrum(Q_t, verbose=False)
-        
-        # Roughness score = condition number × sqrt(negative eigenvalues + 1)
-        # Higher score = harder region = more budget needed
-        roughness = spec['condition_number'] * np.sqrt(spec['negative_count'] + 1)
-        roughness_scores.append(roughness)
-    
-    # Normalize to budget
+        roughness_scores.append(spec['condition_number'] * np.sqrt(spec['negative_count'] + 1))
+
     total_roughness = sum(roughness_scores)
     if total_roughness < 1e-10:
-        # Uniform allocation if all scores near zero
         budgets = [total_budget // len(stages)] * len(stages)
     else:
         budgets = [int(total_budget * r / total_roughness) for r in roughness_scores]
-    
-    # Ensure we use exactly total_budget (handle rounding)
-    budget_diff = total_budget - sum(budgets)
-    budgets[-1] += budget_diff  # Add remainder to last stage
-    
-    # Ensure minimum budget per stage
+
+    # Assign integer-division remainder to the last stage
+    budgets[-1] += total_budget - sum(budgets)
+
+    # Enforce minimum budget per stage (B_s ≥ 5,000)
     min_budget = 5000
     for i in range(len(budgets)):
         if budgets[i] < min_budget:
             budgets[i] = min_budget
-    
-    # Renormalize if we exceeded budget
+
+    # Rescale if minimum enforcement caused overshoot
     if sum(budgets) > total_budget:
         scale = total_budget / sum(budgets)
         budgets = [int(b * scale) for b in budgets]
         budgets[-1] = total_budget - sum(budgets[:-1])
-    
+
     if verbose:
-        print("  Budget allocation by roughness:")
+        print("  Budget allocation by roughness score:")
         for t, b in zip(stages, budgets):
-            pct = b / total_budget * 100
-            print(f"    t={t:.2f}: {b:>7,} steps ({pct:>5.1f}%)")
-    
+            print(f"    t={t:.2f}: {b:>7,} steps ({b / total_budget * 100:>5.1f}%)")
+
     return budgets
 
 
@@ -284,66 +274,59 @@ def adaptive_beam_size(
     max_beam: int = 40
 ) -> int:
     """
-    Compute adaptive beam size based on condition number.
-    
-    Strategy:
-    - High condition number → wider beam (need diversity)
-    - Low condition number → narrower beam (can exploit)
-    
-    Returns:
-        Beam size (clamped to [min_beam, max_beam])
+    Compute the beam size for candidate population control (Section 3.9).
+
+    With base_beam = 20 the rule is:
+
+        κ > 1000  → beam = 40   (very ill-conditioned: maximise diversity)
+        κ > 100   → beam = 30   (moderately ill-conditioned)
+        κ > 10    → beam = 20   (normal)
+        κ ≤ 10    → beam = 10   (well-conditioned: exploit more)
+
+    Beam is clamped to [min_beam, max_beam] = [10, 40].
     """
     if condition_number > 1000:
-        beam = base_beam * 2  # Very ill-conditioned
+        beam = base_beam * 2
     elif condition_number > 100:
-        beam = int(base_beam * 1.5)  # Moderately ill-conditioned
+        beam = int(base_beam * 1.5)
     elif condition_number > 10:
-        beam = base_beam  # Normal
+        beam = base_beam
     else:
-        beam = max(base_beam // 2, min_beam)  # Well-conditioned
-    
-    # Clamp to bounds
-    beam = max(min_beam, min(beam, max_beam))
-    
-    return beam
+        beam = max(base_beam // 2, min_beam)
+
+    return max(min_beam, min(beam, max_beam))
 
 
-# ============================================================================
-# PHASE 2: OPTIMIZATION ROUTINES
-# ============================================================================
+# ---------------------------------------------------------------------------
+# SA core routines
+# ---------------------------------------------------------------------------
 
 def energy(Q: np.ndarray, v: np.ndarray) -> float:
-    """Compute QUBO energy: v^T Q v"""
+    """Evaluate the QUBO energy: E(v) = v^T Q v (Section 3.3)."""
     return float(v @ Q @ v)
 
 
-def project_onehot(v: np.ndarray, N: int, M: int, K: int, 
+def project_onehot(v: np.ndarray, N: int, M: int, K: int,
                    rng: np.random.Generator) -> np.ndarray:
     """
-    Hard projection to satisfy one-hot constraints.
-    
-    For y (deductible) and z (premium): exactly one must be selected.
+    Hard-project v to satisfy the one-hot constraints on y and z.
+
+    For the deductible block y (indices N..N+M) and premium block z
+    (indices N+M..N+M+K), exactly one variable must equal 1. If all
+    entries are zero, a random selection is made.
     """
     v2 = v.copy()
-    
-    # One-hot for y (deductible)
-    y = v2[N:N+M]
-    if np.sum(y) <= 0.0:
-        j = int(rng.integers(0, M))
-    else:
-        j = int(np.argmax(y))
+
+    y = v2[N:N + M]
+    j = int(np.argmax(y)) if np.sum(y) > 0.0 else int(rng.integers(0, M))
     y[:] = 0.0
     y[j] = 1.0
-    
-    # One-hot for z (premium)
-    z = v2[N+M:N+M+K]
-    if np.sum(z) <= 0.0:
-        k = int(rng.integers(0, K))
-    else:
-        k = int(np.argmax(z))
+
+    z = v2[N + M:N + M + K]
+    k = int(np.argmax(z)) if np.sum(z) > 0.0 else int(rng.integers(0, K))
     z[:] = 0.0
     z[k] = 1.0
-    
+
     return v2
 
 
@@ -357,78 +340,79 @@ def simulated_annealing_local(
     initial_solution: np.ndarray = None
 ) -> Tuple[np.ndarray, float]:
     """
-    Local simulated annealing for one stage.
-    
-    Similar to your existing SA but streamlined for SLN.
+    Single-run SA on Q for a fixed number of steps (Section 3.10).
+
+    Move set (Section 3.10):
+        Feature bit flip  : probability 0.85
+        Deductible change : probability 0.075
+        Premium change    : probability 0.075
+
+    One-hot projection is enforced after each proposed move.
+    Temperature follows a linear schedule from T0 to Tend.
+
+    When initial_solution is None, a random binary vector is used and
+    one-hot projection is applied before the first energy evaluation
+    (Stage 0 initialization, Section 3.8).
     """
     n = Q.shape[0]
-    
-    # Initialize
+
     if initial_solution is not None:
         v = initial_solution.copy()
     else:
         v = rng.integers(0, 2, size=n).astype(float)
-    
+
     v = project_onehot(v, N, M, K, rng)
     e = energy(Q, v)
-    
+
     best_v = v.copy()
     best_e = e
-    
-    # Move probabilities
+
     y_start, y_end = N, N + M
     z_start, z_end = N + M, N + M + K
-    
+
     prem_prob = 0.075
-    ded_prob = 0.075
-    flip_prob = 1.0 - prem_prob - ded_prob
-    
+    ded_prob  = 0.075
+    flip_prob = 1.0 - prem_prob - ded_prob   # 0.85
+
     for t in range(steps):
-        # Temperature schedule
         frac = t / max(1, steps - 1)
         T = T0 * (1 - frac) + Tend * frac
-        
-        # Propose move
+
         v_new = v.copy()
         r = float(rng.random())
-        
+
         if r < flip_prob:
-            # Flip a feature bit
+            # Feature bit flip: choose any variable outside y and z blocks
             while True:
                 i = int(rng.integers(0, n))
                 if not (y_start <= i < y_end or z_start <= i < z_end):
                     break
             v_new[i] = 1.0 - v_new[i]
         elif r < flip_prob + ded_prob:
-            # Change deductible
             j = int(rng.integers(0, M))
             v_new[y_start:y_end] = 0.0
             v_new[y_start + j] = 1.0
         else:
-            # Change premium
             k = int(rng.integers(0, K))
             v_new[z_start:z_end] = 0.0
             v_new[z_start + k] = 1.0
-        
-        # Project and evaluate
+
         v_new = project_onehot(v_new, N, M, K, rng)
         e_new = energy(Q, v_new)
-        
-        # Accept/reject
+
         if e_new < e or rng.random() < np.exp(-(e_new - e) / max(T, 1e-10)):
             v, e = v_new, e_new
-        
-        # Track best
+
         if e < best_e:
             best_e = e
             best_v = v.copy()
-    
+
     return best_v, best_e
 
 
-# ============================================================================
-# PHASE 3: MAIN ALGORITHM
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Main ECHO algorithm
+# ---------------------------------------------------------------------------
 
 def spectral_landscape_navigation(
     Q_base: np.ndarray,
@@ -445,258 +429,246 @@ def spectral_landscape_navigation(
     verbose: bool = True
 ) -> Dict[str, Any]:
     """
-    Spectral Landscape Navigation (SLN): Eigenvalue-guided adaptive homotopy.
-    
+    ECHO: Eigenvalue-guided Constrained Homotopy Optimization (Algorithm 1).
+
+    Implements the full algorithm described in Sections 3.4–3.10. Executes
+    exactly B_total = 800,000 SA steps (modulo integer-division rounding)
+    across adaptive homotopy stages, matching the baseline SA evaluation
+    budget (Section 3.7).
+
     Args:
-        Q_base: Base objective matrix (no penalties)
-        Q_oh, Q_reg, Q_aff: Penalty matrices (unit weight)
-        N, M, K, L: Problem dimensions
-        w_oh, w_reg, w_aff: Penalty weights
-        seed: Random seed
-        params: Optional parameters (overrides defaults)
-        SA_solver: Custom SA solver (optional)
-        verbose: Print progress
-    
-    Returns:
-        Dictionary with solution, energy, and diagnostic information
+        Q_base         : Economic objective matrix Q^(obj) (Section 3.3).
+        Q_oh, Q_reg, Q_aff : Unit-weight penalty matrices (Section 3.3).
+        N, M, K, L     : Problem dimensions (features, deductible bands,
+                         premium bands, regulatory slack variables).
+        w_oh, w_reg, w_aff : Penalty weights applied to the unit matrices.
+        seed           : Random seed for full reproducibility.
+        params         : Optional dict overriding default parameters.
+        SA_solver      : Unused; reserved for future custom SA injection.
+        verbose        : Print stage-level diagnostic output.
+
+    Returns a dict with:
+        solution       : Best binary vector v* found on the original Q.
+        energy         : E(v*) = v*^T Q v* on the unsmoothed Q at t=1.
+        best_stage     : Index of the stage at which v* was found.
+        runtime        : Wall-clock time in seconds (recorded, not used
+                         for termination; Section 3.7).
+        tau0           : Initial smoothing parameter τ₀ (Section 3.5).
+        stages         : List of homotopy stage t-values.
+        budgets        : SA step budget allocated to each stage.
+        spectra        : Spectral diagnostics at each stage.
+        steps_used     : Total SA steps executed.
+        method         : 'ECHO'.
     """
-    
     start_time = time.time()
-    
-    # Set default parameters
+
+    # Default parameters (Algorithm 1 header)
     default_params = {
-        'total_budget': 800_000,
-        'max_stages': 8,
+        'total_budget':        800_000,
+        'max_stages':          8,
         'smoothing_percentile': 0.25,
-        'base_beam': 20,
-        'initial_restarts': 40,
-        'T0': 5.0,
-        'Tend': 0.01,
+        'base_beam':           20,
+        'initial_restarts':    40,
+        'T0':                  5.0,
+        'Tend':                0.01,
     }
-    
     if params is not None:
         default_params.update(params)
     params = default_params
-    
-    # Initialize RNG
+
     rng = np.random.default_rng(seed)
-    
-    # Build combined penalty matrix
+
+    # Step 1: Construct Q^(pen) (Algorithm 1, step 1)
     Q_penalties = w_oh * Q_oh + w_reg * Q_reg + w_aff * Q_aff
-    
+
     if verbose:
-        print("="*70)
-        print("ECHO OPTIMIZER (Eigenvalue-guided Constrained Homotopy Optimization)")
-        print("="*70)
+        print("=" * 70)
+        print("ECHO — Eigenvalue-guided Constrained Homotopy Optimization")
+        print("=" * 70)
         print(f"Problem: N={N}, M={M}, K={K}, L={L}")
         print(f"Penalty weights: w_oh={w_oh:.1e}, w_reg={w_reg:.1e}, w_aff={w_aff:.1e}")
         print()
-    
-    # ========================================================================
-    # PHASE 1: SPECTRAL ANALYSIS
-    # ========================================================================
-    
+
+    # ------------------------------------------------------------------
+    # Phase 1: Spectral analysis
+    # ------------------------------------------------------------------
     if verbose:
-        print("[PHASE 1] Spectral Landscape Analysis")
-        print("-"*70)
-    
-    # Estimate initial smoothing
+        print("[Phase 1] Spectral Landscape Analysis")
+        print("-" * 70)
+
+    # Step 2: Compute τ₀ (Section 3.5)
     tau0 = estimate_initial_smoothing(
         Q_base, Q_penalties, params['smoothing_percentile']
     )
-    
     if verbose:
         print(f"  Initial smoothing τ₀: {tau0:.1e}")
-    
-    # Compute adaptive stages
+
+    # Step 3–4: Sample candidates, select stages (Section 3.6)
     stages = compute_adaptive_stages(
         Q_base, Q_penalties, tau0,
         max_stages=params['max_stages'],
         verbose=verbose
     )
-    
-    # Allocate budget
+
+    # Step 5: Allocate budget by roughness score (Section 3.7)
     budgets = allocate_budget_by_roughness(
         stages, Q_base, Q_penalties, tau0,
         params['total_budget'],
         verbose=verbose
     )
-    
-    # Analyze spectrum at each stage
+
+    # Spectral diagnostics at each stage (used in Phase 2 and for output)
     if verbose:
         print()
-        print("  Spectral analysis at each stage:")
-        print("  " + "-"*66)
+        print("  Spectral diagnostics by stage:")
+        print("  " + "-" * 66)
         print(f"  {'Stage':<8} {'t':<6} {'τ(t)':<12} {'Cond':<12} {'Neg':<6} {'Rough':<12}")
-        print("  " + "-"*66)
-    
+        print("  " + "-" * 66)
+
     spectra = []
     for i, t in enumerate(stages):
         tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
         if tau_t > 1e-8:
             Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
-        
         spec = analyze_spectrum(Q_t, verbose=False)
         spectra.append(spec)
-        
         if verbose:
             print(f"  {i:<8} {t:<6.2f} {tau_t:<12.1e} "
                   f"{spec['condition_number']:<12.1e} "
                   f"{spec['negative_count']:<6} "
                   f"{spec['roughness']:<12.1e}")
-    
+
     if verbose:
-        print("  " + "-"*66)
+        print("  " + "-" * 66)
         print()
-    
-    # ========================================================================
-    # PHASE 2: HOMOTOPY OPTIMIZATION
-    # ========================================================================
-    
+
+    # ------------------------------------------------------------------
+    # Phase 2: Homotopy optimization
+    # ------------------------------------------------------------------
     if verbose:
-        print("[PHASE 2] Adaptive Homotopy Optimization")
-        print("-"*70)
-    
+        print("[Phase 2] Adaptive Homotopy Optimization")
+        print("-" * 70)
+
     candidates = []
-    best_overall_energy = float('inf')
+    best_overall_energy   = float('inf')
     best_overall_solution = None
-    best_overall_stage = 0
-    
+    best_overall_stage    = 0
     steps_used = 0
-    
+
     for stage_idx, (t, budget, spectrum) in enumerate(zip(stages, budgets, spectra)):
-        
-        # Adaptive beam size
+
+        # Step 7a: Beam size from condition number (Section 3.9)
         beam = adaptive_beam_size(
             spectrum['condition_number'],
             base_beam=params['base_beam']
         )
-        
-        # Build Q(t) with adaptive smoothing
+
+        # Build Q(t) with diagonal smoothing (Section 3.4)
         tau_t = tau0 * (1 - t) ** 2
         Q_t = Q_base + t * Q_penalties
         if tau_t > 1e-8:
             Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
-        
+
         if verbose:
-            print(f"\n[Stage {stage_idx}] t={t:.2f}, λ={tau_t:.1e}, beam={beam}")
+            print(f"\n[Stage {stage_idx}]  t={t:.2f},  τ(t)={tau_t:.1e},  beam={beam}")
             print(f"  Budget: {budget:,} steps")
             print(f"  Condition: {spectrum['condition_number']:.1e}")
-        
-        # Initialize or continue
+
         if stage_idx == 0:
-            # Initial stage: multiple random restarts
-            num_restarts = params['initial_restarts']
-            steps_per_restart = budget // num_restarts
-            
+            # Step 6: Stage 0 — multistart exploration (Section 3.8)
+            num_restarts       = params['initial_restarts']
+            steps_per_restart  = budget // num_restarts
+
             if verbose:
-                print(f"  Initializing with {num_restarts} random restarts")
-                print(f"  ({steps_per_restart:,} steps each)")
-            
+                print(f"  Stage 0: {num_restarts} random restarts, "
+                      f"{steps_per_restart:,} steps each")
+
             for r in range(num_restarts):
-                # Random initialization
                 solution, e = simulated_annealing_local(
                     Q_t, N, M, K, L, rng,
                     steps=steps_per_restart,
                     T0=params['T0'],
-                    Tend=params['Tend']
+                    Tend=params['Tend'],
                 )
-                
-                candidates.append({
-                    'solution': solution,
-                    'energy': e,
-                    'stage': stage_idx
-                })
-                
+                candidates.append({'solution': solution, 'energy': e, 'stage': stage_idx})
                 if e < best_overall_energy:
-                    best_overall_energy = e
+                    best_overall_energy   = e
                     best_overall_solution = solution.copy()
-                    best_overall_stage = stage_idx
-            
-            steps_used += budget
-            
+                    best_overall_stage    = stage_idx
+
         else:
-            # Continue from previous stage
-            num_candidates = len(candidates)
-            steps_per_candidate = budget // max(num_candidates, 1)
-            
+            # Step 7b: Subsequent stages — refine each surviving candidate
+            # (Section 3.10): steps_per_candidate = ⌊B_s / |candidates|⌋
+            num_candidates       = len(candidates)
+            steps_per_candidate  = budget // max(num_candidates, 1)
+
             if verbose:
-                print(f"  Continuing from {num_candidates} candidates")
-                print(f"  ({steps_per_candidate:,} steps each)")
-            
+                print(f"  Refining {num_candidates} candidates, "
+                      f"{steps_per_candidate:,} steps each")
+
             new_candidates = []
             for cand in candidates:
-                # Continue optimization from this solution
                 solution, e = simulated_annealing_local(
                     Q_t, N, M, K, L, rng,
                     steps=steps_per_candidate,
                     T0=params['T0'],
                     Tend=params['Tend'],
-                    initial_solution=cand['solution']
+                    initial_solution=cand['solution'],
                 )
-                
-                new_candidates.append({
-                    'solution': solution,
-                    'energy': e,
-                    'stage': stage_idx
-                })
-                
+                new_candidates.append({'solution': solution, 'energy': e, 'stage': stage_idx})
                 if e < best_overall_energy:
-                    best_overall_energy = e
+                    best_overall_energy   = e
                     best_overall_solution = solution.copy()
-                    best_overall_stage = stage_idx
-            
+                    best_overall_stage    = stage_idx
+
             candidates = new_candidates
-            steps_used += budget
-        
-        # Keep top beam candidates
+
+        steps_used += budget
+
+        # Step 7c: Beam pruning — keep top beam by staged energy
         candidates.sort(key=lambda c: c['energy'])
         candidates = candidates[:beam]
-        
+
         if verbose:
-            best_stage_energy = min(c['energy'] for c in candidates)
-            print(f"  Best energy this stage: {best_stage_energy:.6f}")
-            print(f"  Steps used so far: {steps_used:,} / {params['total_budget']:,}")
-    
-    # ========================================================================
-    # FINALIZE
-    # ========================================================================
-    
+            print(f"  Best staged energy: {min(c['energy'] for c in candidates):.6f}")
+            print(f"  Steps used: {steps_used:,} / {params['total_budget']:,}")
+
+    # ------------------------------------------------------------------
+    # Step 8: Evaluate best solution on original unsmoothed Q (Section 3.4)
+    # ------------------------------------------------------------------
     runtime = time.time() - start_time
-    
-    # Evaluate on ORIGINAL Q (no smoothing) at t=1
     Q_final = Q_base + Q_penalties
     final_energy = energy(Q_final, best_overall_solution)
-    
+
     if verbose:
         print()
-        print("="*70)
-        print("SLN COMPLETE")
-        print("="*70)
-        print(f"Best energy (final Q): {final_energy:.6f}")
+        print("=" * 70)
+        print("ECHO COMPLETE")
+        print("=" * 70)
+        print(f"Best energy on Q: {final_energy:.6f}")
         print(f"Best found at stage: {best_overall_stage}")
-        print(f"Runtime: {runtime:.2f}s")
-        print(f"✓ Budget verified: {steps_used:,} steps used")
-        print("="*70)
-    
+        print(f"Runtime: {runtime:.2f} s  (recorded; not used for termination)")
+        print(f"Steps used: {steps_used:,} / {params['total_budget']:,}")
+        print("=" * 70)
+
     return {
-        'solution': best_overall_solution,
-        'energy': final_energy,
+        'solution':   best_overall_solution,
+        'energy':     final_energy,
         'best_stage': best_overall_stage,
-        'runtime': runtime,
-        'tau0': tau0,
-        'stages': stages,
-        'budgets': budgets,
-        'spectra': spectra,
+        'runtime':    runtime,
+        'tau0':       tau0,
+        'stages':     stages,
+        'budgets':    budgets,
+        'spectra':    spectra,
         'steps_used': steps_used,
-        'method': 'ECHO',
+        'method':     'ECHO',
     }
 
 
-# ============================================================================
-# MULTI-START WRAPPER
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Multi-start wrapper (optional robustness layer)
+# ---------------------------------------------------------------------------
 
 def spectral_landscape_navigation_multistart(
     Q_base: np.ndarray,
@@ -713,91 +685,80 @@ def spectral_landscape_navigation_multistart(
     verbose: bool = True
 ) -> Dict[str, Any]:
     """
-    Multi-start SLN: Run SLN multiple times and keep best result.
-    
-    This provides additional robustness against local minima.
-    
-    Args:
-        num_starts: Number of independent SLN runs
-        Other args: Same as spectral_landscape_navigation
-    
-    Returns:
-        Best result across all runs, with multi-start metadata
+    Run ECHO multiple times with independent seeds and return the best result.
+
+    This wrapper is not used in the paper's main experiments; the single-run
+    ECHO already incorporates multi-start exploration at Stage 0
+    (initial_restarts = 40, Section 3.8). It is provided for users who want
+    additional robustness at higher computational cost.
+
+    Each run uses a deterministic seed derived from the base seed so that
+    multi-start results are fully reproducible.
     """
-    
     if verbose:
-        print("="*70)
-        print(f"MULTI-START SLN ({num_starts} runs)")
-        print("="*70)
-        print()
-    
+        print("=" * 70)
+        print(f"ECHO MULTI-START ({num_starts} runs)")
+        print("=" * 70)
+
     results = []
-    
     for run in range(num_starts):
-        # Use different seed for each run
         run_seed = (seed * 7919 + run * 104729) & 0xFFFFFFFF if seed is not None else None
-        
         if verbose:
-            print(f"\n{'='*70}")
-            print(f"RUN {run + 1}/{num_starts} (seed={run_seed})")
-            print(f"{'='*70}")
-        
+            print(f"\nRun {run + 1}/{num_starts}  (seed={run_seed})")
         result = spectral_landscape_navigation(
             Q_base, Q_oh, Q_reg, Q_aff,
             N, M, K, L,
             w_oh, w_reg, w_aff,
             seed=run_seed,
             params=params,
-            verbose=verbose
+            verbose=verbose,
         )
-        
         results.append(result)
-        
         if verbose:
-            print(f"\nRun {run + 1} complete: energy = {result['energy']:.6f}")
-    
-    # Select best result
+            print(f"Run {run + 1} energy: {result['energy']:.6f}")
+
     best_result = min(results, key=lambda r: r['energy'])
-    
+
     if verbose:
-        print("\n" + "="*70)
-        print("MULTI-START SUMMARY")
-        print("="*70)
         energies = [r['energy'] for r in results]
-        print(f"Runs completed: {num_starts}")
-        print(f"Best energy: {min(energies):.6f}")
+        print("\n" + "=" * 70)
+        print("MULTI-START SUMMARY")
+        print("=" * 70)
+        print(f"Best energy:  {min(energies):.6f}")
         print(f"Worst energy: {max(energies):.6f}")
-        print(f"Mean energy: {np.mean(energies):.6f}")
-        print(f"Std energy: {np.std(energies):.6f}")
-        print("="*70)
-    
-    # Add multi-start metadata
-    best_result['multistart'] = True
-    best_result['num_starts'] = num_starts
+        print(f"Mean energy:  {np.mean(energies):.6f}")
+        print(f"Std energy:   {np.std(energies):.6f}")
+        print("=" * 70)
+
+    best_result['multistart']   = True
+    best_result['num_starts']   = num_starts
     best_result['all_energies'] = [r['energy'] for r in results]
-    
     return best_result
 
 
-# ============================================================================
-# CONVENIENCE FUNCTION
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Convenience accessors
+# ---------------------------------------------------------------------------
 
 def get_default_SLN_parameters() -> Dict[str, Any]:
     """
-    Get default parameters for SLN.
-    
-    These can be overridden by passing a params dict to SLN functions.
+    Return the default ECHO parameter dict (Algorithm 1 header values).
+
+    These match the values used in all paper experiments and can be passed
+    as the params argument to spectral_landscape_navigation to override
+    individual entries.
     """
     return {
-        'total_budget': 800_000,
-        'max_stages': 8,
+        'total_budget':         800_000,
+        'max_stages':           8,
         'smoothing_percentile': 0.25,
-        'base_beam': 20,
-        'initial_restarts': 40,
-        'T0': 5.0,
-        'Tend': 0.01,
+        'base_beam':            20,
+        'initial_restarts':     40,
+        'T0':                   5.0,
+        'Tend':                 0.01,
     }
 
+
 def echo_optimize(*args, **kwargs):
+    """Alias for spectral_landscape_navigation."""
     return spectral_landscape_navigation(*args, **kwargs)
