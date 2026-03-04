@@ -446,19 +446,32 @@ def run_echo_benchmark(
     best_stage = 0
     steps_used = 0
 
+    # Families where Q_pen is a smoothing matrix only (maxcut, spectral_dense):
+    # the homotopy is Q_t = Q_base + tau*(1-t)^2 * I
+    # Q_pen is used only to calibrate tau0; it must NOT be blended in via t*Q_pen.
+    # Blending it in makes Q_t PSD at every stage (including t=1), so v=0 wins.
+    # Portfolio: Q_pen IS the penalty objective → normal homotopy Q_base + t*Q_pen.
+    _is_smoothing_only = _family in ("maxcut", "spectral_dense")
+
     for stage_idx, (t_val, budget) in enumerate(zip(stages, budgets)):
         is_final = (t_val >= 1.0 - 1e-9)
 
-        # Stage QUBO: smoothing diagonal only on non-final stages.
-        # IMPORTANT: diagnostics are computed on Q_base (no smoothing) for
-        # portfolio so that κ / roughness scores are not τ-diagonal artifacts.
         tau_t = tau0 * (1 - t_val) ** 2 if not is_final else 0.0
-        Q_t   = Q_base + t_val * Q_penalties
+
+        if _is_smoothing_only:
+            # Q_pen is NOT blended in — only the tau diagonal changes.
+            # At t=0: Q_base + tau0*I (smooth surrogate)
+            # At t=1: Q_base exactly (tau_t=0, no penalty term)
+            Q_t    = Q_base.copy()
+            Q_diag = Q_base          # diagnostics: always the real target
+        else:
+            # Portfolio (and any future constrained families):
+            # penalty is part of the objective; blend it in via t.
+            Q_t    = Q_base + t_val * Q_penalties
+            Q_diag = Q_base + t_val * Q_penalties   # smoothing-free diagnostics
+
         if tau_t > 1e-8:
             Q_t = Q_t + tau_t * np.eye(Q_t.shape[0])
-
-        # Spectral diagnostics: always on the base penalized QUBO (no smoothing)
-        Q_diag = Q_base + t_val * Q_penalties   # smoothing-free
         spec   = analyze_spectrum(Q_diag)
         spectra.append(spec)
         beam = adaptive_beam_size(spec["condition_number"], base_beam=p["base_beam"])
