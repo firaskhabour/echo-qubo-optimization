@@ -108,25 +108,40 @@ _MASTER_EXTRA = ["sa_raw_objective", "sa_echo_raw_objective",
 # Automatic temperature scaling
 # ---------------------------------------------------------------------------
 
-def _auto_temperature(Q: np.ndarray) -> tuple[float, float]:
+def _auto_temperature(Q: np.ndarray, n_samples: int = 200,
+                       seed: int = 42) -> tuple[float, float]:
     """
-    Derive T0 and Tend from the energy scale of Q so SA can explore
-    the landscape regardless of QUBO magnitude.
+    Derive T0 and Tend by directly measuring the mean absolute single-flip
+    energy change on Q.
 
-    T0 = mean absolute row sum of Q, clamped to [5, 1e6].
-    This approximates the typical single-flip energy change and ensures
-    SA accepts ~50%% of uphill moves at the start.
+    Method: sample n_samples random (v, flip-at-i) pairs, compute |dE| for
+    each, and set T0 = mean|dE|.  This is exact by definition — ratio
+    T0/mean|dE| = 1.0 — and requires no structural assumptions about Q.
 
-    For insurance QUBOs (energies O(1)):     T0 ~ 5    (matches legacy value)
-    For portfolio QUBOs (energies O(50)):    T0 ~ 50   (was frozen at 5 -> infeasible)
-    For large-N portfolio (energies O(500)): T0 ~ 500  (scales automatically)
+    At T0 = mean|dE|:
+      P(accept uphill | dE = mean_dE) = exp(-1) ≈ 37%
+      Expected total acceptance ≈ 68%  (good exploration without random walk)
 
-    Tend = T0 * 1e-3  (cool to 0.1%% of T0).
+    Previous formula (mean absolute row sum) overcounted for sparse QUBOs:
+      maxcut N=50:  row-sum T0=22.95 vs actual mean|dE|=3.70  (ratio 6.2x too hot)
+      portfolio N=50: row-sum T0=3051 vs actual mean|dE|=1595  (ratio 1.9x)
+
+    Tend = T0 * 1e-3  (cool to 0.1% of T0 over the full schedule).
+    Clamped to T0 >= 1.0 so Tend never underflows to zero.
     """
-    T0   = float(np.mean(np.abs(Q).sum(axis=1)))
-    T0   = max(5.0, min(T0, 1e6))
+    N   = Q.shape[0]
+    rng = np.random.default_rng(seed)
+    des = []
+    for _ in range(n_samples):
+        v  = rng.integers(0, 2, size=N).astype(float)
+        i  = int(rng.integers(0, N))
+        vn = v.copy(); vn[i] = 1.0 - vn[i]
+        de = abs(float(vn @ Q @ vn) - float(v @ Q @ v))
+        des.append(de)
+    T0   = max(1.0, float(np.mean(des)))
     Tend = T0 * 1e-3
     return T0, Tend
+
 
 
 # ---------------------------------------------------------------------------
@@ -547,19 +562,19 @@ def _check_sa_mobility(Q: np.ndarray, N: int, family: str, seed: int = 1234) -> 
     mean_abs_dE = float(np.mean(delta_es)) if delta_es else 1.0
     ratio       = T0 / max(mean_abs_dE, 1e-10)
 
-    if ratio < 0.05:
+    if ratio < 0.2:
         raise PreflightError(
             f"[preflight] SA FROZEN for family='{family}'\n"
-            f"  T0={T0:.2f}  mean|dE|={mean_abs_dE:.2f}  ratio=T0/mean|dE|={ratio:.4f} < 0.05\n"
+            f"  T0={T0:.2f}  mean|dE|={mean_abs_dE:.2f}  ratio=T0/mean|dE|={ratio:.4f} < 0.2\n"
             f"  SA temperature covers only {ratio*100:.1f}% of typical move cost.\n"
-            f"  Uphill exploration disabled - SA cannot escape local minima.\n"
+            f"  Uphill exploration effectively disabled — SA cannot escape local minima.\n"
             f"  Fix: _auto_temperature is not scaling T0 correctly for this QUBO."
         )
-    if accept_rate > 0.99:
+    if accept_rate > 0.85:
         raise PreflightError(
             f"[preflight] SA TOO HOT for family='{family}'\n"
-            f"  T0={T0:.2f}  accept_rate={accept_rate*100:.1f}% > 99%\n"
-            f"  SA is a random walk - no exploitation of the energy landscape.\n"
+            f"  T0={T0:.2f}  accept_rate={accept_rate*100:.1f}% > 85%\n"
+            f"  SA is near-random walk — insufficient exploitation of energy landscape.\n"
             f"  Fix: decrease T0 or rescale Q."
         )
 
