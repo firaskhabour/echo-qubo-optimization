@@ -51,8 +51,10 @@ Each result row schema
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -616,6 +618,35 @@ def _print_summary(family: str, master_df: pd.DataFrame) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Results archive  (called before any new run overwrites existing results)
+# ---------------------------------------------------------------------------
+
+def _archive_results(family: str) -> None:
+    """
+    If results/<family>/ already exists and contains any CSV files, rename it
+    to results/<family>_YYYYMMDD_HHMMSS/ before the new run starts.
+
+    This preserves every previous run without manual intervention.
+    The new run then writes into a fresh results/<family>/ directory.
+    """
+    results_dir = _ROOT / "results" / family
+    if not results_dir.exists():
+        return  # nothing to archive
+
+    # Only archive if there is actual data inside
+    csv_files = list(results_dir.glob("*.csv"))
+    if not csv_files:
+        return
+
+    timestamp  = datetime.now().strftime("%Y%m%d_%H%M%S")
+    archive_dir = _ROOT / "results" / f"{family}_{timestamp}"
+    shutil.copytree(results_dir, archive_dir)
+    shutil.rmtree(results_dir)
+    print(f"  [archive] Existing results archived to: results/{family}_{timestamp}/")
+
+
+
+# ---------------------------------------------------------------------------
 # Main pipeline for a single family
 # ---------------------------------------------------------------------------
 
@@ -635,6 +666,10 @@ def run_family(
     results can be monitored in real time.
     """
     gen_kwargs  = gen_kwargs or FAMILY_GEN_KWARGS.get(family, {})
+
+    # Archive any existing results before starting a fresh run
+    _archive_results(family)
+
     results_dir = _ROOT / "results" / family
     sa_csv      = results_dir / "sa_results.csv"
     echo_csv    = results_dir / "sa_echo_results.csv"
@@ -657,8 +692,8 @@ def run_family(
     print(f"  Output    : results/{family}/sa_results.csv  (written after every SA)")
     print(f"              results/{family}/sa_echo_results.csv  (written after every ECHO-SA)")
     # Rough timing guidance so the user knows what to expect
-    print(f"  Estimated : ~2-30s per step depending on N  "
-          f"(N=50 ≈ 2s, N=300 ≈ 25s per solver)")
+    print(f"  Estimated : ~0.3-5s per step depending on N  "
+          f"(N=50 ≈ 0.3s, N=300 ≈ 5s per solver)")
     print(f"{'='*60}", flush=True)
 
     # --- Pre-flight sanity checks (abort before wasting time if broken) ---
@@ -733,6 +768,14 @@ def run_family(
             **spec_row,
         }
 
+        # N-proportional budget: scales with problem size so runtime stays
+        # roughly constant per instance.  800,000 (insurance budget) is 16x
+        # too large at N=50 — SA converges in ~10k steps and wastes 790k.
+        # N * 2000 gives: N=50→100k, N=150→300k, N=300→600k.
+        # This matches observed convergence thresholds for both families.
+        instance_budget    = N * 2_000
+        sa_steps_per_start = instance_budget // 20   # 20 restarts
+
         # ---- SA ----
         sa_done = _already_computed(sa_csv, family, instance_id, seed, N, "sa")
         if skip_existing and sa_done:
@@ -740,7 +783,8 @@ def run_family(
             _bar_update(f"skip sa  | N={N} seed={seed}")
         else:
             _bar_update(f"running sa      N={N} seed={seed}")
-            sa_res  = run_sa_multistart(Q_full, N, seed)
+            sa_res  = run_sa_multistart(Q_full, N, seed,
+                                        steps_per_start=sa_steps_per_start)
             sa_eval = float(qubo_energy(Q_full, sa_res["solution"]))
             sa_row  = {
                 **base_row,
@@ -761,7 +805,10 @@ def run_family(
             _bar_update(f"skip echo| N={N} seed={seed}")
         else:
             _bar_update(f"running echo-sa N={N} seed={seed}")
-            echo_res  = run_echo_benchmark(Q_base, Q_pen, w_pen, N, seed)
+            # seed + 1_000_000: ECHO must explore different initial states than SA.
+            # Same seed -> identical rng -> identical stage-0 restarts -> ties.
+            echo_res  = run_echo_benchmark(Q_base, Q_pen, w_pen, N, seed + 1_000_000,
+                                            params={"total_budget": instance_budget})
             echo_eval = float(echo_res["energy"])
             echo_row  = {
                 **base_row,
