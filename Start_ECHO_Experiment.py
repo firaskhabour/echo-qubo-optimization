@@ -34,15 +34,82 @@ PY   = sys.executable
 
 # Existing runner scripts  (never modified)
 _BASELINE_SCRIPT = ROOT / "src_code" / "runners" / "run_baseline_full.py"
-_ECHO_SCRIPT     = ROOT / "src_code" / "runners" / "run_echo_full.py"
 
-# New benchmark runner
-_BENCH_SCRIPT    = ROOT / "src_code" / "runners" / "run_benchmarks.py"
+# ---------------------------------------------------------------------------
+# Requirements check
+# ---------------------------------------------------------------------------
+
+# Packages that must be present for any pipeline to run.
+# gurobipy is treated separately — optional, missing = Gurobi steps skipped.
+_REQUIRED_PACKAGES = [
+    ("numpy",   "numpy"),
+    ("pandas",  "pandas"),
+    ("yaml",    "pyyaml"),
+    ("tqdm",    "tqdm"),
+    ("scipy",   "scipy"),
+]
+
+def _check_requirements() -> bool:
+    """
+    Check that all required packages are importable.
+    For each missing package, offer to install it via pip.
+    Returns True only when every required package is available.
+    Gurobi is checked separately and treated as optional.
+    """
+    missing = []
+    for import_name, pip_name in _REQUIRED_PACKAGES:
+        try:
+            __import__(import_name)
+        except ImportError:
+            missing.append((import_name, pip_name))
+
+    if missing:
+        print()
+        _hr()
+        print("  REQUIREMENTS CHECK — missing packages detected")
+        _hr()
+        for import_name, pip_name in missing:
+            print(f"  [missing] {pip_name}")
+        print()
+
+        for import_name, pip_name in missing:
+            ch = input(f"  Install '{pip_name}' now? [y/n]: ").strip().lower()
+            if ch == "y":
+                print(f"  Installing {pip_name}...")
+                result = subprocess.run(
+                    [PY, "-m", "pip", "install", pip_name],
+                    capture_output=False,
+                )
+                if result.returncode != 0:
+                    print(f"\n  [error] Failed to install {pip_name}.")
+                    print(f"  Please run:  pip install {pip_name}")
+                    print("  Then restart this script.")
+                    return False
+                print(f"  [ok] {pip_name} installed.")
+            else:
+                print(f"\n  Cannot continue without '{pip_name}'.")
+                print(f"  Please run:  pip install {pip_name}")
+                print("  Then restart this script.")
+                return False
+
+    # Optional: Gurobi
+    try:
+        import gurobipy  # noqa: F401
+        print("  [ok] gurobipy found — Gurobi solver will be available.")
+    except ImportError:
+        print("  [info] gurobipy not found — Gurobi steps will be skipped.")
+        print("         To enable Gurobi: install gurobipy and ensure a valid licence.")
+
+    return True
+
+# Remaining runner paths (defined after ROOT is set above)
+_ECHO_SCRIPT  = ROOT / "src_code" / "runners" / "run_echo_full.py"
+_BENCH_SCRIPT = ROOT / "src_code" / "runners" / "run_benchmarks.py"
 
 # Key result files produced by Option 2
-_BASELINE_CSV    = ROOT / "results" / "baseline_full_results.csv"
-_ECHO_CSV        = ROOT / "results" / "echo_full_results.csv"
-
+_BASELINE_CSV = ROOT / "results" / "baseline_full_results.csv"
+_ECHO_CSV     = ROOT / "results" / "echo_full_results.csv"
+_ECHO_SCRIPT     = ROOT / "src_code" / "runners" / "run_echo_full.py"
 
 # ---------------------------------------------------------------------------
 # Console helpers
@@ -265,6 +332,13 @@ def _run_option1() -> bool:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    print()
+    _hr()
+    print("  ECHO Experiment Launcher — checking requirements...")
+    _hr()
+    if not _check_requirements():
+        sys.exit(1)
+
     # Warn about missing scripts but do NOT exit — only the relevant option
     # will fail if its specific script is absent.
     for s in (_BASELINE_SCRIPT, _ECHO_SCRIPT):

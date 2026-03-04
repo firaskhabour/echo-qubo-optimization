@@ -517,7 +517,7 @@ def run_family(
     Full SA + SA-ECHO benchmark pipeline for one family.
     Manages directory creation, dependency checks, and master CSV build.
     """
-    gen_kwargs = gen_kwargs or FAMILY_GEN_KWARGS.get(family, {})
+    gen_kwargs  = gen_kwargs or FAMILY_GEN_KWARGS.get(family, {})
     results_dir = _ROOT / "results" / family
     sa_csv      = results_dir / "sa_results.csv"
     echo_csv    = results_dir / "sa_echo_results.csv"
@@ -527,26 +527,45 @@ def run_family(
         results_dir.mkdir(parents=True, exist_ok=True)
         print(f"  Initialized results/{family}/ directory.")
 
-    n_total = len(N_list) * len(seeds)
+    n_total   = len(N_list) * len(seeds)
+    instances = [(N, seed) for N in N_list for seed in seeds]
+
     print(f"\n{'='*60}")
-    print(f"  Benchmark: {family}")
-    print(f"  N values : {N_list}")
-    print(f"  Seeds    : {seeds[0]}..{seeds[-1]}  ({len(seeds)} seeds)")
-    print(f"  Instances: {n_total}")
-    if skip_existing:
-        print(f"  Mode     : skip existing (resume-safe)")
+    print(f"  Benchmark : {family}")
+    print(f"  N values  : {N_list}")
+    print(f"  Seeds     : {seeds[0]}..{seeds[-1]}  ({len(seeds)} seeds)")
+    print(f"  Instances : {n_total}  (SA + SA-ECHO per instance)")
+    print(f"  Mode      : {'skip existing (resume-safe)' if skip_existing else 'force rerun'}")
     print(f"{'='*60}")
 
-    done = 0
-    for N in N_list:
-        for seed in seeds:
+    try:
+        from tqdm import tqdm
+        _tqdm_available = True
+    except ImportError:
+        _tqdm_available = False
+
+    if _tqdm_available:
+        bar = tqdm(
+            instances,
+            desc=f"  {family}",
+            unit="inst",
+            ncols=72,
+            bar_format="  {l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]",
+        )
+        for N, seed in bar:
+            bar.set_postfix_str(f"N={N} seed={seed}", refresh=True)
             _run_instance(family, N, seed, gen_kwargs,
                           sa_csv, echo_csv, skip_existing, verbose)
-            done += 1
-            if done % 20 == 0:
-                print(f"  Progress: {done}/{n_total}")
+        bar.close()
+    else:
+        # Fallback: plain counter — always prints so the user knows it's alive
+        for done, (N, seed) in enumerate(instances, 1):
+            instance_id = f"{family}_N{N}_seed{seed}"
+            print(f"  [{done:>3}/{n_total}] {instance_id} ...", flush=True)
+            _run_instance(family, N, seed, gen_kwargs,
+                          sa_csv, echo_csv, skip_existing, verbose)
 
-    print(f"\n  Completed {done} instances for {family}.")
+    print(f"\n  Completed {n_total} instances for {family}.")
     print(f"  Building comparison table...")
     master = build_master(family, results_dir)
     if master is not None:
