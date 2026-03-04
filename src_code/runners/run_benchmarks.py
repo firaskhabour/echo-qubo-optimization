@@ -251,6 +251,40 @@ _PORTFOLIO_FINAL_ABS_MIN: int = 50_000
 #: (Audit B fix — the t≈0.36 stage was taking 56% of budget).
 _PORTFOLIO_INTER_STAGE_CAP: float = 0.15
 
+#: MaxCut ECHO schedule constants
+#: tau0 for maxcut is calibrated to |lambda_min(Q_base)|, not Q_pen spread.
+#: Q_pen spread is O(50), which gives tau0=100 — 5.5× too large — erasing
+#: all negative-eigenvalue signal and making stage-0 useless as a warm-up.
+#: We compute the correct tau0 per-instance in _maxcut_stage_budgets.
+_MAXCUT_FINAL_FRAC_MIN:  float = 0.70   # 70% of budget on Q_base directly
+_MAXCUT_FINAL_ABS_MIN:   int   = 50_000  # absolute floor
+_MAXCUT_WARMUP_RESTARTS: int   = 40      # restarts in the single warm-up stage
+
+
+def _maxcut_stage_budgets(
+    total_budget: int,
+    tau0_actual: float,
+) -> tuple[List[float], List[int]]:
+    """
+    Two-stage schedule for maxcut ECHO.
+
+      Stage 0  (t=0): Q_base + tau0*I   — single warm-up, 30% of budget
+      Stage 1  (t=1): Q_base            — refine on exact target, 70% of budget
+
+    tau0 is computed per-instance as |lambda_min(Q_base)| so the smoothing
+    just lifts Q_base to near-PSD — minimal distortion, maximal signal
+    preservation.
+
+    Returns ([0.0, 1.0], [B_warmup, B_final]).
+    """
+    B_final  = max(int(total_budget * _MAXCUT_FINAL_FRAC_MIN),
+                   _MAXCUT_FINAL_ABS_MIN)
+    B_final  = min(B_final, total_budget)
+    B_warmup = total_budget - B_final
+    B_warmup = max(B_warmup, 2_000)
+    return [0.0, 1.0], [B_warmup, B_final]
+
+
 #: K-repair interval: after how many SA steps to project back to K-cardinality
 #: during intermediate stages.  Not applied at final stage (t=1) where the
 #: full Q_full penalty already guides SA toward K naturally.
@@ -421,6 +455,8 @@ def run_echo_benchmark(
     else:
         Q_full = Q_base + Q_penalties  # portfolio: penalty is part of objective
 
+    is_maxcut = (_family == "maxcut")
+
     if is_portfolio:
         # ── Portfolio-specific path (Audit A + B fix) ──────────────────────
         # Fixed t-schedule, guaranteed final-stage budget, K-repair.
@@ -430,8 +466,19 @@ def run_echo_benchmark(
                                           p["smoothing_percentile"])
         debug = p.get("echo_debug", False)
         debug_rows: List[Dict] = []
+    elif is_maxcut:
+        # ── MaxCut-specific path ────────────────────────────────────────────
+        # Two-stage schedule: one τ-smoothed warm-up + one full final stage.
+        # tau0 = |lambda_min(Q_base)|: lifts Q_base to just-PSD, preserving
+        # all spectral signal. Using Q_pen spread (default) gives tau0=100 —
+        # 5.5× too large — which erases negative-eigenvalue structure and makes
+        # the warm-up useless (stage-0 candidates land at energy ≈ 0 on Q_base).
+        eigs_base = np.linalg.eigvalsh(Q_base)
+        tau0      = float(max(abs(eigs_base.min()), 1.0))  # |lambda_min|
+        stages, budgets = _maxcut_stage_budgets(p["total_budget"], tau0)
+        debug = False
     else:
-        # ── Generic ECHO path (maxcut, spectral_dense, …) ──────────────────
+        # ── Generic ECHO path (spectral_dense, …) ──────────────────────────
         tau0   = estimate_initial_smoothing(Q_base, Q_penalties,
                                             p["smoothing_percentile"])
         stages = compute_adaptive_stages(Q_base, Q_penalties, tau0,
@@ -476,6 +523,15 @@ def run_echo_benchmark(
         spectra.append(spec)
         beam = adaptive_beam_size(spec["condition_number"], base_beam=p["base_beam"])
 
+        # Per-stage temperatures: derive T0/Tend from the actual Q_t being optimised.
+        # Using the global T0 (calibrated to Q_base+Q_pen) over-heats smoothing-only
+        # stages where Q_t has a much smaller energy scale, turning SA into a random
+        # walk.  Portfolio uses a stable penalty scale so global T0 is fine there.
+        if _is_smoothing_only:
+            T0_stage, Tend_stage = _auto_temperature(Q_t)
+        else:
+            T0_stage, Tend_stage = p["T0"], p["Tend"]
+
         if stage_idx == 0:
             n_restarts        = p["initial_restarts"]
             steps_per_restart = budget // n_restarts
@@ -495,7 +551,7 @@ def run_echo_benchmark(
                 for _ in range(n_restarts):
                     v, e = _sa_pure_bitflip(Q_t, N, rng,
                                             steps=steps_per_restart,
-                                            T0=p["T0"], Tend=p["Tend"])
+                                            T0=T0_stage, Tend=Tend_stage)
                     # Always rank candidates on Q_full (the real target QUBO).
                     # Q_t is PSD at stage 0 for maxcut/spectral_dense — ranking
                     # on Q_t makes v=0 win, corrupting all downstream stages.
@@ -523,7 +579,7 @@ def run_echo_benchmark(
                 for cand in candidates:
                     v, e = _sa_pure_bitflip(Q_t, N, rng,
                                             steps=steps_per_cand,
-                                            T0=p["T0"], Tend=p["Tend"],
+                                            T0=T0_stage, Tend=Tend_stage,
                                             initial_solution=cand["solution"])
                     e_target = qubo_energy(Q_full, v)
                     new_cands.append({"solution": v, "energy": e_target})
