@@ -105,7 +105,32 @@ _MASTER_EXTRA = ["sa_raw_objective", "sa_echo_raw_objective",
 
 
 # ---------------------------------------------------------------------------
-# Pure SA for benchmark families  (M=K=0 — no one-hot blocks to project)
+# Automatic temperature scaling
+# ---------------------------------------------------------------------------
+
+def _auto_temperature(Q: np.ndarray) -> tuple[float, float]:
+    """
+    Derive T0 and Tend from the energy scale of Q so SA can explore
+    the landscape regardless of QUBO magnitude.
+
+    T0 = mean absolute row sum of Q, clamped to [5, 1e6].
+    This approximates the typical single-flip energy change and ensures
+    SA accepts ~50%% of uphill moves at the start.
+
+    For insurance QUBOs (energies O(1)):     T0 ~ 5    (matches legacy value)
+    For portfolio QUBOs (energies O(50)):    T0 ~ 50   (was frozen at 5 -> infeasible)
+    For large-N portfolio (energies O(500)): T0 ~ 500  (scales automatically)
+
+    Tend = T0 * 1e-3  (cool to 0.1%% of T0).
+    """
+    T0   = float(np.mean(np.abs(Q).sum(axis=1)))
+    T0   = max(5.0, min(T0, 1e6))
+    Tend = T0 * 1e-3
+    return T0, Tend
+
+
+# ---------------------------------------------------------------------------
+# Pure SA for benchmark families  (M=K=0 -- no one-hot blocks to project)
 # ---------------------------------------------------------------------------
 
 def _sa_pure_bitflip(
@@ -113,16 +138,22 @@ def _sa_pure_bitflip(
     N: int,
     rng: np.random.Generator,
     steps: int = 800_000,
-    T0: float = 5.0,
-    Tend: float = 0.01,
+    T0: Optional[float] = None,
+    Tend: Optional[float] = None,
     initial_solution: Optional[np.ndarray] = None,
 ) -> tuple[np.ndarray, float]:
     """
     Single-run SA with pure bit-flip moves for unconstrained / single-constraint
     benchmark QUBOs where M=K=0 (no premium/deductible one-hot blocks).
 
-    Uses the same budget and temperature schedule as the insurance SA.
+    T0 and Tend default to None -> automatically derived from Q via
+    _auto_temperature(Q). Pass explicit values to override.
     """
+    if T0 is None or Tend is None:
+        _T0, _Tend = _auto_temperature(Q)
+        T0   = T0   if T0   is not None else _T0
+        Tend = Tend if Tend is not None else _Tend
+
     v = (initial_solution.copy() if initial_solution is not None
          else rng.integers(0, 2, size=N).astype(float))
     e = qubo_energy(Q, v)
@@ -155,14 +186,19 @@ def run_sa_multistart(
 ) -> Dict[str, Any]:
     """
     Multi-start SA matching the insurance baseline budget of 800,000 steps.
-    20 starts × 40,000 steps = 800,000 total.
+    20 starts x 40,000 steps = 800,000 total.
+
+    Temperature is derived automatically from Q's energy scale so that both
+    insurance QUBOs (energies O(1)) and portfolio QUBOs (energies O(w_pen))
+    are explored correctly without manual tuning.
     """
-    rng = np.random.default_rng(seed)
-    t0  = time.time()
+    rng      = np.random.default_rng(seed)
+    T0, Tend = _auto_temperature(Q)
+    t0       = time.time()
 
     best_v, best_e = None, float("inf")
     for _ in range(num_starts):
-        v, e = _sa_pure_bitflip(Q, N, rng, steps=steps_per_start)
+        v, e = _sa_pure_bitflip(Q, N, rng, steps=steps_per_start, T0=T0, Tend=Tend)
         if e < best_e:
             best_e = e
             best_v = v.copy()
@@ -190,14 +226,19 @@ def run_echo_benchmark(
     insurance SA (which requires M>0 and K>0 for one-hot projection).
     Matches the same 800,000-step budget as the insurance ECHO.
     """
+    # Auto-scale temperatures to Q_full's energy magnitude.
+    # Q_full = Q_base + w_pen*Q_pen; used only for temperature estimation.
+    Q_full_temp = Q_base + w_pen * Q_pen
+    T0_auto, Tend_auto = _auto_temperature(Q_full_temp)
+
     default_params = {
         "total_budget":         800_000,
         "max_stages":           8,
         "smoothing_percentile": 0.25,
         "base_beam":            20,
         "initial_restarts":     40,
-        "T0":                   5.0,
-        "Tend":                 0.01,
+        "T0":                   T0_auto,
+        "Tend":                 Tend_auto,
     }
     if params:
         default_params.update(params)
@@ -334,103 +375,6 @@ def _append_row(csv_path: Path, row: Dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Single instance runner
-# ---------------------------------------------------------------------------
-
-def _run_instance(
-    family: str,
-    N: int,
-    seed: int,
-    gen_kwargs: Dict[str, Any],
-    sa_csv: Path,
-    echo_csv: Path,
-    skip_existing: bool,
-    verbose: bool,
-) -> None:
-    instance_id = f"{family}_N{N}_seed{seed}"
-
-    sa_done   = _already_computed(sa_csv,   family, instance_id, seed, N, "sa")
-    echo_done = _already_computed(echo_csv, family, instance_id, seed, N, "sa_echo")
-
-    if skip_existing and sa_done and echo_done:
-        if verbose:
-            print(f"  [skip] {instance_id}  (both sa + sa_echo already present)")
-        return
-
-    # Generate QUBO
-    inst     = generate_instance(family, N, seed, **gen_kwargs)
-    Q_base   = inst["Q_base"]
-    Q_pen    = inst["Q_pen"]
-    w_pen    = inst["w_pen"]
-    meta     = inst["meta"]
-    Q_full   = Q_base + w_pen * Q_pen
-
-    # Spectral diagnostics of the final Q
-    spec = analyze_spectrum(Q_full)
-    spec_row = {
-        "eigen_min":        spec["eig_min"],
-        "eigen_max":        spec["eig_max"],
-        "condition_number": spec["condition_number"],
-        "neg_eigs":         spec["negative_count"],
-    }
-
-    base_row = {
-        "benchmark_family": family,
-        "instance_id":      instance_id,
-        "seed":             seed,
-        "N":                N,
-        "edge_prob":        meta.get("edge_prob"),
-        "num_edges":        meta.get("num_edges"),
-        "k_frac":           meta.get("k_frac"),
-        "K_card":           meta.get("K_card"),
-        "penalty_weight":   meta.get("penalty_weight"),
-        **spec_row,
-    }
-
-    # ------------------------------------------------------------------
-    # Run SA
-    # ------------------------------------------------------------------
-    if not (skip_existing and sa_done):
-        if verbose:
-            print(f"  [sa]       {instance_id}")
-        sa_res  = run_sa_multistart(Q_full, N, seed)
-        sa_eval = float(qubo_energy(Q_full, sa_res["solution"]))
-        sa_row  = {
-            **base_row,
-            "solver":        "sa",
-            "raw_objective": sa_eval,
-            "energy_total":  sa_eval,
-            "is_feasible":   _check_feasible(sa_res["solution"], family, meta),
-            "runtime_sec":   sa_res["runtime"],
-        }
-        _append_row(sa_csv, {c: sa_row.get(c) for c in _BASE_COLS})
-    else:
-        if verbose:
-            print(f"  [skip sa]  {instance_id}")
-
-    # ------------------------------------------------------------------
-    # Run SA-ECHO
-    # ------------------------------------------------------------------
-    if not (skip_existing and echo_done):
-        if verbose:
-            print(f"  [sa_echo]  {instance_id}")
-        echo_res  = run_echo_benchmark(Q_base, Q_pen, w_pen, N, seed)
-        echo_eval = float(echo_res["energy"])
-        echo_row  = {
-            **base_row,
-            "solver":        "sa_echo",
-            "raw_objective": echo_eval,
-            "energy_total":  echo_eval,
-            "is_feasible":   _check_feasible(echo_res["solution"], family, meta),
-            "runtime_sec":   echo_res["runtime"],
-        }
-        _append_row(echo_csv, {c: echo_row.get(c) for c in _BASE_COLS})
-    else:
-        if verbose:
-            print(f"  [skip echo]{instance_id}")
-
-
-# ---------------------------------------------------------------------------
 # Merge / master CSV builder
 # ---------------------------------------------------------------------------
 
@@ -485,6 +429,161 @@ def build_master(family: str, results_dir: Path) -> Optional[pd.DataFrame]:
     return merged
 
 
+
+# ---------------------------------------------------------------------------
+# Pre-flight sanity checks  (run once per family before any solver starts)
+# ---------------------------------------------------------------------------
+
+class PreflightError(RuntimeError):
+    """Raised when a pre-flight check fails.  Aborts the run cleanly."""
+
+
+def _check_penalty_shape(family: str, gen_kwargs: Dict[str, Any]) -> None:
+    """
+    Check 1 — Penalty shape sanity.
+
+    Generates a small test instance (N=20), sets Q_base=0 so only the
+    penalty contributes, then samples 500 random binary vectors at each
+    cardinality s=0..N and verifies that the mean penalty energy forms a
+    bowl with minimum at s=K_card.
+
+    Catches: wrong off-diagonal coefficient, wrong sign, wrong K encoding.
+
+    Skipped for 'maxcut' (unconstrained, no cardinality penalty to check).
+    """
+    if family == "maxcut":
+        return  # unconstrained — no penalty bowl to verify
+
+    N_test = 20
+    inst   = generate_instance(family, N_test, seed=9999, **gen_kwargs)
+    Q_pen  = inst["Q_pen"]
+    w_pen  = inst["w_pen"]
+    meta   = inst["meta"]
+    K      = meta.get("K_card")
+
+    if K is None or w_pen == 0.0:
+        return  # family has no cardinality constraint
+
+    # Zero out objective: only penalty contributes
+    Q_pen_scaled = w_pen * Q_pen
+
+    rng    = np.random.default_rng(42)
+    n_samples = 500
+    mean_e_by_s: Dict[int, float] = {}
+
+    for s in range(N_test + 1):
+        energies = []
+        for _ in range(n_samples):
+            if s == 0:
+                x = np.zeros(N_test)
+            elif s == N_test:
+                x = np.ones(N_test)
+            else:
+                idx = rng.choice(N_test, s, replace=False)
+                x   = np.zeros(N_test); x[idx] = 1.0
+            energies.append(float(x @ Q_pen_scaled @ x))
+        mean_e_by_s[s] = float(np.mean(energies))
+
+    # The minimum mean energy must be at s = K_card
+    s_min = min(mean_e_by_s, key=mean_e_by_s.get)
+    e_min = mean_e_by_s[s_min]
+    e_at_K = mean_e_by_s[K]
+
+    if s_min != K:
+        # Allow tolerance: K must be within the lowest 10% of energy range
+        e_max  = max(mean_e_by_s.values())
+        e_range = e_max - e_min
+        threshold = e_min + 0.10 * e_range if e_range > 0 else e_min
+        if e_at_K > threshold:
+            raise PreflightError(
+                f"[preflight] PENALTY SHAPE FAIL for family=\'{family}\'\n"
+                f"  Penalty energy minimum is at s={s_min} (energy={e_min:.4f})\n"
+                f"  but K_card={K} has energy={e_at_K:.4f}.\n"
+                f"  The constraint is NOT enforcing s=K. Check Q_pen construction.\n"
+                f"  Mean energies by s: { {s: round(e,2) for s, e in sorted(mean_e_by_s.items())[:K+4]} }"
+            )
+
+    print(f"  [preflight] penalty shape OK — minimum at s={s_min}=K  "
+          f"(e={e_min:.2f})  s=K±1 energies: "
+          f"[{mean_e_by_s.get(K-1, float('nan')):.2f}, "
+          f"{e_at_K:.2f}, "
+          f"{mean_e_by_s.get(K+1, float('nan')):.2f}]")
+
+
+def _check_sa_mobility(Q: np.ndarray, N: int, family: str, seed: int = 1234) -> None:
+    """
+    Check 2 - SA mobility sanity.
+
+    Runs 200 SA warmup steps using the same T0 from _auto_temperature(Q),
+    then measures accept_rate, mean_abs_dE, and ratio = T0 / mean_abs_dE.
+
+    ratio < 0.05  ->  SA FROZEN: T0 covers < 5% of typical move cost.
+                      Uphill moves are always rejected. SA cannot escape
+                      local minima. Catches the original T0=5 / energy~180
+                      mismatch bug even when raw accept rate looks ok (22%).
+    accept > 99%  ->  SA TOO HOT: random walk, no exploitation.
+    """
+    T0, _ = _auto_temperature(Q)
+    rng   = np.random.default_rng(seed)
+    v     = rng.integers(0, 2, size=N).astype(float)
+    e     = qubo_energy(Q, v)
+
+    n_warmup   = 200
+    n_accepted = 0
+    delta_es   = []
+
+    for _ in range(n_warmup):
+        i     = int(rng.integers(0, N))
+        v_new = v.copy(); v_new[i] = 1.0 - v_new[i]
+        e_new = qubo_energy(Q, v_new)
+        dE    = e_new - e
+        delta_es.append(abs(dE))
+        accept_prob = 1.0 if dE < 0 else float(np.exp(-dE / max(T0, 1e-10)))
+        if rng.random() < accept_prob:
+            v, e = v_new, e_new
+            n_accepted += 1
+
+    accept_rate = n_accepted / n_warmup
+    mean_abs_dE = float(np.mean(delta_es)) if delta_es else 1.0
+    ratio       = T0 / max(mean_abs_dE, 1e-10)
+
+    if ratio < 0.05:
+        raise PreflightError(
+            f"[preflight] SA FROZEN for family='{family}'\n"
+            f"  T0={T0:.2f}  mean|dE|={mean_abs_dE:.2f}  ratio=T0/mean|dE|={ratio:.4f} < 0.05\n"
+            f"  SA temperature covers only {ratio*100:.1f}% of typical move cost.\n"
+            f"  Uphill exploration disabled - SA cannot escape local minima.\n"
+            f"  Fix: _auto_temperature is not scaling T0 correctly for this QUBO."
+        )
+    if accept_rate > 0.99:
+        raise PreflightError(
+            f"[preflight] SA TOO HOT for family='{family}'\n"
+            f"  T0={T0:.2f}  accept_rate={accept_rate*100:.1f}% > 99%\n"
+            f"  SA is a random walk - no exploitation of the energy landscape.\n"
+            f"  Fix: decrease T0 or rescale Q."
+        )
+
+    print(f"  [preflight] SA mobility OK - accept={accept_rate*100:.0f}%  "
+          f"mean|dE|={mean_abs_dE:.2f}  T0={T0:.2f}  ratio={ratio:.3f}")
+
+def _run_preflight(family: str, gen_kwargs: Dict[str, Any]) -> None:
+    """
+    Run all pre-flight checks for a family using a small representative instance.
+    Raises PreflightError on any failure, which aborts run_family cleanly.
+    """
+    print(f"  [preflight] Running sanity checks for family=\'{family}\'...")
+
+    # Check 1: penalty shape (cardinality families only)
+    _check_penalty_shape(family, gen_kwargs)
+
+    # Check 2: SA mobility — use first N in DEFAULT_N_LIST as representative
+    N_test = 50
+    inst   = generate_instance(family, N_test, seed=1234, **gen_kwargs)
+    Q_full = inst["Q_base"] + inst["w_pen"] * inst["Q_pen"]
+    _check_sa_mobility(Q_full, N_test, family)
+
+    print(f"  [preflight] All checks passed for \'{family}\'.")
+
 # ---------------------------------------------------------------------------
 # Print summary
 # ---------------------------------------------------------------------------
@@ -515,57 +614,157 @@ def run_family(
 ) -> None:
     """
     Full SA + SA-ECHO benchmark pipeline for one family.
-    Manages directory creation, dependency checks, and master CSV build.
+    Progress bar advances after every individual solver run (SA or ECHO),
+    so each step is visible and the bar never appears frozen.
+    CSV files are written immediately after each solver completes so
+    results can be monitored in real time.
     """
     gen_kwargs  = gen_kwargs or FAMILY_GEN_KWARGS.get(family, {})
     results_dir = _ROOT / "results" / family
     sa_csv      = results_dir / "sa_results.csv"
     echo_csv    = results_dir / "sa_echo_results.csv"
 
-    # Create output directories, informing the user
     if not results_dir.exists():
         results_dir.mkdir(parents=True, exist_ok=True)
         print(f"  Initialized results/{family}/ directory.")
 
-    n_total   = len(N_list) * len(seeds)
     instances = [(N, seed) for N in N_list for seed in seeds]
+    n_inst    = len(instances)
+    # Each instance has 2 solver steps (SA + ECHO); bar advances on each
+    n_steps   = n_inst * 2
 
     print(f"\n{'='*60}")
     print(f"  Benchmark : {family}")
     print(f"  N values  : {N_list}")
     print(f"  Seeds     : {seeds[0]}..{seeds[-1]}  ({len(seeds)} seeds)")
-    print(f"  Instances : {n_total}  (SA + SA-ECHO per instance)")
+    print(f"  Instances : {n_inst}  (SA + ECHO-SA per instance = {n_steps} steps)")
     print(f"  Mode      : {'skip existing (resume-safe)' if skip_existing else 'force rerun'}")
-    print(f"{'='*60}")
+    print(f"  Output    : results/{family}/sa_results.csv  (written after every SA)")
+    print(f"              results/{family}/sa_echo_results.csv  (written after every ECHO-SA)")
+    # Rough timing guidance so the user knows what to expect
+    print(f"  Estimated : ~2-30s per step depending on N  "
+          f"(N=50 ≈ 2s, N=300 ≈ 25s per solver)")
+    print(f"{'='*60}", flush=True)
+
+    # --- Pre-flight sanity checks (abort before wasting time if broken) ---
+    try:
+        _run_preflight(family, gen_kwargs)
+    except PreflightError as exc:
+        print(f"\n{'!'*60}")
+        print(str(exc))
+        print(f"{'!'*60}")
+        print("  Aborting. Fix the issue and re-run.")
+        return
 
     try:
         from tqdm import tqdm
-        _tqdm_available = True
+        _tqdm = tqdm
     except ImportError:
-        _tqdm_available = False
+        _tqdm = None
 
-    if _tqdm_available:
-        bar = tqdm(
-            instances,
+    completed_sa   = 0
+    completed_echo = 0
+    skipped        = 0
+
+    if _tqdm is not None:
+        bar = _tqdm(
+            total=n_steps,
             desc=f"  {family}",
-            unit="inst",
+            unit="solver",
             ncols=72,
-            bar_format="  {l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]",
+            bar_format=(
+                "  {desc}: {percentage:3.0f}%|{bar}| "
+                "{n_fmt}/{total_fmt} [{elapsed}<{remaining}]"
+            ),
         )
-        for N, seed in bar:
-            bar.set_postfix_str(f"N={N} seed={seed}", refresh=True)
-            _run_instance(family, N, seed, gen_kwargs,
-                          sa_csv, echo_csv, skip_existing, verbose)
-        bar.close()
     else:
-        # Fallback: plain counter — always prints so the user knows it's alive
-        for done, (N, seed) in enumerate(instances, 1):
-            instance_id = f"{family}_N{N}_seed{seed}"
-            print(f"  [{done:>3}/{n_total}] {instance_id} ...", flush=True)
-            _run_instance(family, N, seed, gen_kwargs,
-                          sa_csv, echo_csv, skip_existing, verbose)
+        bar = None
 
-    print(f"\n  Completed {n_total} instances for {family}.")
+    def _bar_update(label: str) -> None:
+        if bar is not None:
+            bar.set_postfix_str(label, refresh=True)
+            bar.update(1)
+        else:
+            print(f"  {label}", flush=True)
+
+    for N, seed in instances:
+        instance_id = f"{family}_N{N}_seed{seed}"
+
+        # ---- Generate QUBO (fast, no bar step) ----
+        inst   = generate_instance(family, N, seed, **gen_kwargs)
+        Q_base = inst["Q_base"]
+        Q_pen  = inst["Q_pen"]
+        w_pen  = inst["w_pen"]
+        meta   = inst["meta"]
+        Q_full = Q_base + w_pen * Q_pen
+
+        spec = analyze_spectrum(Q_full)
+        spec_row = {
+            "eigen_min":        spec["eig_min"],
+            "eigen_max":        spec["eig_max"],
+            "condition_number": spec["condition_number"],
+            "neg_eigs":         spec["negative_count"],
+        }
+        base_row = {
+            "benchmark_family": family,
+            "instance_id":      instance_id,
+            "seed":             seed,
+            "N":                N,
+            "edge_prob":        meta.get("edge_prob"),
+            "num_edges":        meta.get("num_edges"),
+            "k_frac":           meta.get("k_frac"),
+            "K_card":           meta.get("K_card"),
+            "penalty_weight":   meta.get("penalty_weight"),
+            **spec_row,
+        }
+
+        # ---- SA ----
+        sa_done = _already_computed(sa_csv, family, instance_id, seed, N, "sa")
+        if skip_existing and sa_done:
+            skipped += 1
+            _bar_update(f"skip sa  | N={N} seed={seed}")
+        else:
+            _bar_update(f"running sa      N={N} seed={seed}")
+            sa_res  = run_sa_multistart(Q_full, N, seed)
+            sa_eval = float(qubo_energy(Q_full, sa_res["solution"]))
+            sa_row  = {
+                **base_row,
+                "solver":        "sa",
+                "raw_objective": sa_eval,
+                "energy_total":  sa_eval,
+                "is_feasible":   _check_feasible(sa_res["solution"], family, meta),
+                "runtime_sec":   round(sa_res["runtime"], 3),
+            }
+            _append_row(sa_csv, {c: sa_row.get(c) for c in _BASE_COLS})
+            completed_sa += 1
+            _bar_update(f"done sa  {sa_eval:+.2f} | N={N} seed={seed}")
+
+        # ---- ECHO-SA ----
+        echo_done = _already_computed(echo_csv, family, instance_id, seed, N, "sa_echo")
+        if skip_existing and echo_done:
+            skipped += 1
+            _bar_update(f"skip echo| N={N} seed={seed}")
+        else:
+            _bar_update(f"running echo-sa N={N} seed={seed}")
+            echo_res  = run_echo_benchmark(Q_base, Q_pen, w_pen, N, seed)
+            echo_eval = float(echo_res["energy"])
+            echo_row  = {
+                **base_row,
+                "solver":        "sa_echo",
+                "raw_objective": echo_eval,
+                "energy_total":  echo_eval,
+                "is_feasible":   _check_feasible(echo_res["solution"], family, meta),
+                "runtime_sec":   round(echo_res["runtime"], 3),
+            }
+            _append_row(echo_csv, {c: echo_row.get(c) for c in _BASE_COLS})
+            completed_echo += 1
+            _bar_update(f"done echo{echo_eval:+.2f} | N={N} seed={seed}")
+
+    if bar is not None:
+        bar.close()
+
+    print(f"\n  SA runs   : {completed_sa} new  ({skipped} skipped)")
+    print(f"  ECHO runs : {completed_echo} new")
     print(f"  Building comparison table...")
     master = build_master(family, results_dir)
     if master is not None:
