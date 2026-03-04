@@ -749,17 +749,11 @@ def main():
     sa_num_starts_cfg = solver_cfg.get("sa_num_starts", None)
     sa_num_starts  = int(sa_num_starts_cfg) if sa_num_starts_cfg is not None else int(num_starts_greedy)
 
-    # Move probabilities (Section 3.10 baseline values: 0.85 / 0.075 / 0.075).
-    # In S4 (affordability), the premium move probability is raised to 0.15 to
-    # increase the frequency of premium band proposals, as affordability
-    # constraints act directly on premium band selection. The deductible
-    # probability is correspondingly reduced to keep flip_prob = 0.80.
-    if affordability_enabled:
-        prem_prob = 0.15
-        ded_prob  = 0.05
-    else:
-        prem_prob = 0.075
-        ded_prob  = 0.075
+    # Move probabilities: 0.85 / 0.075 / 0.075 across all scenarios (Section 3.10).
+    # Uniform across all four scenarios — no scenario-specific parameter tuning
+    # (abstract and Section 4.2).
+    prem_prob = 0.075
+    ded_prob  = 0.075
 
     # ------------------------------------------------------------------
     # Independent RNG streams for greedy and SA.
