@@ -458,6 +458,9 @@ def main() -> None:
         print("  2. Run Primary QUBO Pipeline (Generate instances → Greedy → SA → Gurobi → ECHO-SA)")
         print("  3. Run Benchmark QUBO Families (Max-Cut, Portfolio, Spectral_dense) → SA → ECHO-SA")
         print("  Q. Quit")
+        print("")
+        print("Enjoy the run!")
+        print("Firas F. Kh.")
         _hr()
 
         ch = _ask("  Select option [1 / 2 / 3 / Q]:", ["1", "2", "3", "q"])

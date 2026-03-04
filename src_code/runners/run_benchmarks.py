@@ -406,10 +406,20 @@ def run_echo_benchmark(
     rng = np.random.default_rng(seed)
     t0  = time.time()
 
-    Q_penalties = w_pen * Q_pen
-    Q_full      = Q_base + Q_penalties   # real target QUBO (τ=0, t=1)
+    Q_penalties  = w_pen * Q_pen
     is_portfolio = p.get("family") == "portfolio_card"
     K_card       = p.get("K_card", 0)
+
+    # For maxcut and spectral_dense, Q_pen is a smoothing matrix only — it is
+    # added during ECHO stages to lift eigenvalues, but the real target QUBO is
+    # Q_base alone.  Q_base + Q_pen is PSD, so v=0 trivially wins if used as
+    # Q_full inside ECHO.  For portfolio_card, Q_pen IS the cardinality penalty
+    # and must be included in Q_full.
+    _family = p.get("family", "")
+    if _family in ("maxcut", "spectral_dense"):
+        Q_full = Q_base               # target is Q_base only
+    else:
+        Q_full = Q_base + Q_penalties  # portfolio: penalty is part of objective
 
     if is_portfolio:
         # ── Portfolio-specific path (Audit A + B fix) ──────────────────────
@@ -473,9 +483,13 @@ def run_echo_benchmark(
                     v, e = _sa_pure_bitflip(Q_t, N, rng,
                                             steps=steps_per_restart,
                                             T0=p["T0"], Tend=p["Tend"])
-                    candidates.append({"solution": v, "energy": e})
-                    if e < best_e:
-                        best_e, best_v, best_stage = e, v.copy(), stage_idx
+                    # Always rank candidates on Q_full (the real target QUBO).
+                    # Q_t is PSD at stage 0 for maxcut/spectral_dense — ranking
+                    # on Q_t makes v=0 win, corrupting all downstream stages.
+                    e_target = qubo_energy(Q_full, v)
+                    candidates.append({"solution": v, "energy": e_target})
+                    if e_target < best_e:
+                        best_e, best_v, best_stage = e_target, v.copy(), stage_idx
         else:
             steps_per_cand = budget // max(len(candidates), 1)
             new_cands = []
@@ -498,9 +512,10 @@ def run_echo_benchmark(
                                             steps=steps_per_cand,
                                             T0=p["T0"], Tend=p["Tend"],
                                             initial_solution=cand["solution"])
-                    new_cands.append({"solution": v, "energy": e})
-                    if e < best_e:
-                        best_e, best_v, best_stage = e, v.copy(), stage_idx
+                    e_target = qubo_energy(Q_full, v)
+                    new_cands.append({"solution": v, "energy": e_target})
+                    if e_target < best_e:
+                        best_e, best_v, best_stage = e_target, v.copy(), stage_idx
             candidates = new_cands
 
         candidates.sort(key=lambda c: c["energy"])
@@ -994,11 +1009,14 @@ def run_family(
         # other families use the generic pattern.
         instance_id = meta.get("instance_id") or f"{family}_N{N}_seed{seed}"
 
-        # For spectral_dense: SA and ECHO are evaluated on Q_base (the target
-        # QUBO with designed κ).  Q_pen is the homotopy smoothing matrix only —
-        # it must not be added to the evaluation QUBO, which would destroy κ.
-        # For all other families Q_eval = Q_full as before.
-        Q_eval = Q_base if family == "spectral_dense" else Q_full
+        # maxcut and spectral_dense: Q_pen is a pure smoothing matrix (ECHO only).
+        # Adding it to Q_eval turns the indefinite MaxCut Laplacian into a PSD
+        # matrix whose global minimum is v=0 with E=0 — both SA and ECHO return
+        # the trivial zero vector.  Evaluate on Q_base (the true target QUBO).
+        # portfolio_card: Q_pen encodes the cardinality penalty and IS part of
+        # the objective, so Q_eval = Q_full there.
+        _SMOOTHING_ONLY_FAMILIES = ("maxcut", "spectral_dense")
+        Q_eval = Q_base if family in _SMOOTHING_ONLY_FAMILIES else Q_full
 
         spec = analyze_spectrum(Q_eval)
         spec_row = {
@@ -1210,23 +1228,29 @@ def _run_smoke_test(args: "argparse.Namespace") -> None:
         python run_benchmarks.py --family spectral_dense --N 100 --seed 1000 \
                                  --kappa 1e4 --neg_frac 0.3 --smoke
     """
-    family  = args.family if args.family != "all" else "spectral_dense"
-    N       = args.N    if args.N    is not None else 100
-    seed    = args.seed if args.seed is not None else 1000
-    kappa   = float(args.kappa) if args.kappa else 1e4
-    neg_frac = args.neg_frac
+    family   = args.family if args.family != "all" else "spectral_dense"
+    N        = args.N    if args.N    is not None else 100
+    seed     = args.seed if args.seed is not None else 1000
+    kappa    = float(args.kappa) if args.kappa else None   # None for non-spectral
+    neg_frac = args.neg_frac if family == "spectral_dense" else None
 
-    gen_kw = {"kappa_target": kappa, "neg_frac": neg_frac}
+    # Build gen_kw from the family defaults, not spectral_dense defaults
+    gen_kw = {**FAMILY_GEN_KWARGS.get(family, {})}
+    if family == "spectral_dense":
+        gen_kw["kappa_target"] = kappa if kappa is not None else 1e4
+        gen_kw["neg_frac"]     = neg_frac if neg_frac is not None else 0.3
     inst   = generate_instance(family, N, seed, **gen_kw)
     Q_base, Q_pen, w_pen = inst["Q_base"], inst["Q_pen"], inst["w_pen"]
     meta   = inst["meta"]
     Q_full = Q_base + w_pen * Q_pen
 
     instance_id = meta.get("instance_id") or f"{family}_N{N}_seed{seed}"
-    # For spectral_dense: evaluate on Q_base (the target QUBO with designed κ).
-    # Q_pen is the smoothing matrix for ECHO only; adding it would destroy κ.
-    Q_eval = Q_base if family == "spectral_dense" else Q_full
-    spec   = analyze_spectrum(Q_eval)
+    # maxcut and spectral_dense: Q_pen is a smoothing matrix only.
+    # Adding it to Q_eval makes the MaxCut Laplacian PSD → v=0 wins trivially.
+    # portfolio_card: Q_pen IS the cardinality penalty, part of the objective.
+    _SMOKE_SMOOTHING_ONLY = ("maxcut", "spectral_dense")
+    Q_eval = Q_base if family in _SMOKE_SMOOTHING_ONLY else Q_full
+    spec   = analyze_spectrum(Q_eval)   # spectrum of the actual evaluation QUBO
     budget = N * 2_000
 
     results = []
@@ -1255,19 +1279,19 @@ def _run_smoke_test(args: "argparse.Namespace") -> None:
             "solver":           solver_name,
             "raw_objective":    eval_energy,
             "energy_total":     eval_energy,
-            "is_feasible":      1,
+            "is_feasible":      _check_feasible(res["solution"], family, meta),
             "runtime_sec":      round(res["runtime"], 3),
             "eigen_min":        spec["eig_min"],
             "eigen_max":        spec["eig_max"],
             "condition_number": spec["condition_number"],
             "neg_eigs":         spec["negative_count"],
-            "edge_prob":        None,
-            "num_edges":        None,
-            "k_frac":           None,
-            "K_card":           None,
-            "penalty_weight":   w_pen,
-            "kappa_target":     kappa,
-            "neg_frac":         neg_frac,
+            "edge_prob":        meta.get("edge_prob"),
+            "num_edges":        meta.get("num_edges"),
+            "k_frac":           meta.get("k_frac"),
+            "K_card":           meta.get("K_card"),
+            "penalty_weight":   meta.get("penalty_weight", w_pen),
+            "kappa_target":     meta.get("kappa_target"),
+            "neg_frac":         meta.get("neg_frac"),
         }
         results.append(row)
 
