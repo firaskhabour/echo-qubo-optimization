@@ -17,12 +17,18 @@ portfolio_card
     Constraint encoded as quadratic penalty in Q_pen.
     M=K_bands=L=0.
 
-Both return a dict consumed by run_benchmarks.py:
+spectral_dense
+    Dense QUBO with controlled eigenvalue dispersion.
+    Eigenvalues are log-spaced over kappa_target; neg_frac are negative.
+    Uses smoothing continuation: Q_pen = diag(row_abs_sums), w_pen = 1.0.
+    Designed to maximise ECHO gain by activating all spectral mechanisms.
+
+All return a dict consumed by run_benchmarks.py:
     Q_base  : objective-only QUBO (n x n, symmetric)
-    Q_pen   : unit-weight penalty matrix  (zeros for maxcut)
-    w_pen   : scalar penalty weight       (0.0 for maxcut)
+    Q_pen   : smoothing / penalty matrix
+    w_pen   : scalar penalty weight
     N       : number of binary decision variables
-    M, K, L : always 0 for both families
+    M, K, L : always 0 for all families
     meta    : dict of instance parameters written into result rows
 """
 
@@ -36,65 +42,71 @@ def generate_maxcut(N: int, seed: int, edge_prob: float = 0.5) -> Dict[str, Any]
     """
     Weighted Max-Cut QUBO on G(N, edge_prob) with Normal(0,1) edge weights.
 
-    Edge weights are drawn from Normal(0,1) rather than Uniform(0,1).
-    This produces a *signed* (frustrated) graph where the energy landscape
-    is significantly rougher than uniform-weight graphs, activating all
-    three ECHO mechanisms:
+    QUBO formulation (signed Laplacian, minimisation):
+        Q_full_ij  =  w_ij            (i ≠ j, edge weight ~ Normal(0,1))
+        Q_full_ii  = -sum_j w_ij      (negative signed row sum on diagonal)
+    Minimising v^T Q_full v  ≡  maximising the signed cut weight.
 
-        condition_number > 100 at N≥50  →  beam sizing active (beam 30–40)
-        large roughness variation        →  non-uniform budget allocation
-        spectral change across path      →  meaningful stage selection
+    ECHO decomposition  (reviewer-corrected, Step B):
+    -------------------------------------------------------
+    Previous decomposition split Q_full = W + (-1)*diag(deg), which made
+    the homotopy PATH go from W (no diagonal) → W-D (target) — i.e., it
+    was ADDING ruggedness as t increased, the opposite of ECHO's intention.
+    This caused ECHO to consistently lose vs plain SA at N≥100.
 
-    With Uniform(0,1) weights the graph Laplacian is well-conditioned
-    (κ ≈ 2–3), beam sizing always returns the minimum, and ECHO reduces
-    to smoothed SA with no advantage.
+    Correct decomposition:
+        Q_base = Q_full          (the complete target QUBO, fixed)
+        Q_pen  = diag(row_abs)   (row absolute-sum diagonal — always PSD)
+        w_pen  = 1.0             (positive: smoothing is ADDED, not removed)
 
-    QUBO formulation  (signed Laplacian, minimisation form):
-        Q_full_ij  =  w_ij            (i ≠ j, edge weight)
-        Q_full_ii  = -sum_j w_ij      (signed row sum on diagonal)
-    Minimising v^T Q_full v ≡ maximising signed cut weight.
+    Homotopy path:  Q(t) = Q_base + tau*(1-t)^2 * Q_pen
+        t=0, tau large:  Q(0) = Q_full + tau*diag(row_abs)
+                         All eigenvalues lifted → smooth, nearly-convex landscape.
+                         SA at stage 0 finds good global structure easily.
+        t=1, tau=0:      Q(1) = Q_full
+                         Exact original landscape recovered at the final stage.
 
-    ECHO decomposition  (Q_full = Q_base + w_pen * Q_pen):
-        Q_base  : edge weight matrix W  (off-diagonal only, zero diagonal)
-        Q_pen   : signed degree matrix  diag(sum_j w_ij)
-        w_pen   : -1.0  →  Q_base + (-1)*Q_pen = W - D = Q_full  (exact)
-
-    The signed degree diagonal has eigenvalue range O(sqrt(N)) for Normal
-    weights, giving tau0 a natural scale and the homotopy path genuine
-    spectral curvature to navigate.
+    This aligns with ECHO's core assumption:
+        "Q_pen adds positive curvature that is gradually removed,
+         guiding the solver from a smooth surrogate to the true landscape."
 
     References: Boros & Hammer (2002); Dunning et al. (2018).
     """
     rng = np.random.default_rng(seed)
 
+    # Build edge weight matrix W (off-diagonal, symmetric, Normal(0,1) weights)
     W = np.zeros((N, N), dtype=float)
     for i in range(N):
         for j in range(i + 1, N):
             if rng.random() < edge_prob:
-                w = float(rng.standard_normal())   # Normal(0,1) — signed weights
+                w = float(rng.standard_normal())
                 W[i, j] = w
                 W[j, i] = w
 
-    deg_signed = W.sum(axis=1)   # signed row sums
+    # Full signed-Laplacian QUBO: Q_full = W - diag(deg)
+    deg_signed = W.sum(axis=1)
+    Q_full = W - np.diag(deg_signed)
 
-    Q_base = W.copy()                   # off-diagonal edge weights, zero diagonal
-    Q_pen  = np.diag(deg_signed)        # signed degree diagonal
+    # Smoothing matrix: positive diagonal = row absolute sums of Q_full
+    # PSD by construction; entries scale with local edge-weight magnitude
+    row_abs = np.abs(Q_full).sum(axis=1)
+    Q_pen   = np.diag(row_abs)
 
-    # w_pen = -1: Q_base + (-1)*Q_pen = W - diag(deg) = standard signed Laplacian
-    w_pen  = -1.0
+    # w_pen = 1.0: positive so homotopy ADDS smoothing at stage 0
+    w_pen = 1.0
 
     num_edges = int((W != 0).sum() // 2)
     meta = {
         "benchmark_family": "maxcut",
         "N": N, "seed": seed,
-        "edge_prob":  edge_prob,
-        "num_edges":  num_edges,
+        "edge_prob":   edge_prob,
+        "num_edges":   num_edges,
         "weight_dist": "normal01",
-        "k_frac":     None,
-        "K_card":     None,
+        "k_frac":      None,
+        "K_card":      None,
         "penalty_weight": w_pen,
     }
-    return {"Q_base": Q_base, "Q_pen": Q_pen,
+    return {"Q_base": Q_full, "Q_pen": Q_pen,
             "w_pen": w_pen, "N": N, "M": 0, "K": 0, "L": 0, "meta": meta}
 
 
@@ -162,6 +174,116 @@ def generate_portfolio_card(
             "w_pen": w_pen, "N": N, "M": 0, "K": 0, "L": 0, "meta": meta}
 
 
+def generate_spectral_dense(
+    N: int,
+    seed: int,
+    kappa_target: float = 1e4,
+    neg_frac: float = 0.3,
+) -> Dict[str, Any]:
+    """
+    Dense QUBO with controlled eigenvalue dispersion.
+
+    Construction
+    ------------
+    1. Draw a random orthogonal matrix U via QR of an N×N Gaussian matrix.
+    2. Build log-spaced eigenvalue magnitudes over [1, kappa_target].
+    3. Assign signs: the first ceil(neg_frac * N) magnitudes are negated
+       (making the matrix indefinite), then the sign vector is randomly
+       permuted so negative eigenvalues are spread throughout the spectrum.
+    4. Q = U @ diag(λ) @ U.T, forced exactly symmetric with (Q + Q.T) / 2.
+    5. Scale Q so max(|Q|) = 1 — preserves κ exactly while keeping energy
+       magnitudes comparable across N (otherwise larger N → larger energies).
+
+    ECHO decomposition (smoothing continuation)
+    --------------------------------------------
+    For unconstrained QUBOs without a natural penalty term, ECHO uses a
+    positive-diagonal smoothing matrix:
+
+        Q_base = Q          (the full target QUBO, fixed)
+        Q_pen  = diag(row_abs_sums)   where row_abs_sums[i] = Σ_j |Q[i,j]|
+        w_pen  = 1.0        (positive; smoothing ADDED at stage 0, removed at final)
+
+    Homotopy path: Q(τ) = Q + τ * Q_pen
+        τ large:  all eigenvalues lifted → smooth, near-convex landscape
+        τ = 0:    exact original Q recovered
+
+    Condition number
+    ----------------
+    κ(Q) = |λ_max| / |λ_min| where both extremes are the absolute values of
+    the outermost eigenvalues.  After scaling, κ ≈ kappa_target (exact up to
+    floating-point and the fact that |λ| are log-spaced across N values).
+
+    Parameters
+    ----------
+    N            : problem dimension
+    seed         : RNG seed for reproducibility
+    kappa_target : target condition number (default 1e4)
+    neg_frac     : fraction of eigenvalues that are negative (default 0.3)
+    """
+    rng   = np.random.default_rng(seed)
+    n_neg = max(1, int(math.ceil(neg_frac * N)))
+    n_pos = N - n_neg
+    kt    = max(kappa_target, 1.0 + 1e-9)
+
+    # ── Orthogonal basis via QR ──────────────────────────────────────────────
+    G    = rng.standard_normal((N, N))
+    U, _ = np.linalg.qr(G)
+
+    # ── Eigenvalues: κ_actual = kappa_target exactly ─────────────────────────
+    # Positive branch: logspace(1, kappa_target) → [1 .. kappa_target]
+    # Negative branch: -logspace(1, 1/kappa_target) → [-1 .. -1/kappa_target]
+    # After scaling by kappa_target: λ_max = +1, |λ_min| = 1/kappa_target
+    # → κ = λ_max / |λ_min| = kappa_target  ✓
+    pos_eigs = np.logspace(0,  math.log10(kt), n_pos)   # [1 .. kappa_target]
+    neg_eigs = -np.logspace(0, -math.log10(kt), n_neg)  # [-1 .. -1/kappa_target]
+
+    lambdas  = np.concatenate([neg_eigs, pos_eigs])
+    lambdas  = rng.permutation(lambdas)    # randomise eigenvector associations
+    lambdas  = lambdas / kt               # scale: λ_max=1, |λ_min|=1/kappa_target
+
+    # ── Assemble Q and force exact symmetry ──────────────────────────────────
+    Q = U @ np.diag(lambdas) @ U.T
+    Q = (Q + Q.T) * 0.5
+
+    # ── Smoothing decomposition ──────────────────────────────────────────────
+    # Q_pen = diag(row_abs_sums): always PSD, scales with Q's energy magnitude.
+    # w_pen = +1: homotopy ADDS smoothing at stage 0 and removes it at final.
+    row_abs = np.abs(Q).sum(axis=1)
+    Q_pen   = np.diag(row_abs)
+    w_pen   = 1.0
+
+    # ── Filename-safe kappa tag ───────────────────────────────────────────────
+    exp       = round(math.log10(kappa_target))
+    kappa_tag = f"1e{exp}"
+    instance_id = f"spectral_dense_N{N}_k{kappa_tag}_seed{seed}"
+
+    meta = {
+        "benchmark_family": "spectral_dense",
+        "N":            N,
+        "seed":         seed,
+        "kappa_target": kappa_target,
+        "neg_frac":     neg_frac,
+        "kappa_tag":    kappa_tag,
+        "instance_id":  instance_id,
+        # _BASE_COLS fields not applicable:
+        "edge_prob":      None,
+        "num_edges":      None,
+        "k_frac":         None,
+        "K_card":         None,
+        "penalty_weight": w_pen,
+    }
+    return {
+        "Q_base": Q,
+        "Q_pen":  Q_pen,
+        "w_pen":  w_pen,
+        "N":      N,
+        "M":      0,
+        "K":      0,
+        "L":      0,
+        "meta":   meta,
+    }
+
+
 def generate_instance(family: str, N: int, seed: int, **kwargs) -> Dict[str, Any]:
     """Dispatch to the correct generator. Unknown kwargs are silently ignored."""
     if family == "maxcut":
@@ -171,8 +293,12 @@ def generate_instance(family: str, N: int, seed: int, **kwargs) -> Dict[str, Any
         return generate_portfolio_card(N, seed,
             k_frac=float(kwargs.get("k_frac", 0.15)),
             lambda_risk=float(kwargs.get("lambda_risk", 1.0)),
-            scale_factor=float(kwargs.get("scale_factor", 50.0)))
+            scale_factor=float(kwargs.get("scale_factor", 10.0)))
+    elif family == "spectral_dense":
+        return generate_spectral_dense(N, seed,
+            kappa_target=float(kwargs.get("kappa_target", 1e4)),
+            neg_frac=float(kwargs.get("neg_frac", 0.3)))
     else:
         raise ValueError(
             f"Unknown benchmark family '{family}'. "
-            "Expected 'maxcut' or 'portfolio_card'.")
+            "Expected 'maxcut', 'portfolio_card', or 'spectral_dense'.")

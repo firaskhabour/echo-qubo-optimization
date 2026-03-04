@@ -1,0 +1,16 @@
+# ECHO Experiment — Python dependencies
+# =======================================
+# Install all required packages with:
+#     pip install -r requirements.txt
+#
+# Required — must be present for any pipeline to run
+numpy>=1.24.0
+pandas>=1.5.0
+pyyaml>=6.0
+tqdm>=4.64.0
+
+# Optional — needed only for Options 1 and 2 (insurance QUBO pipeline)
+# gurobipy also requires a valid Gurobi licence (academic licences are free).
+# Download from: https://www.gurobi.com/downloads/
+# If absent, Gurobi steps are skipped automatically — everything else still runs.
+# gurobipy>=10.0.0
