@@ -47,6 +47,18 @@ Each result row schema
     eigen_min, eigen_max, condition_number, neg_eigs,
     + family-specific: edge_prob, num_edges, k_frac, K_card,
                        penalty_weight, echo_beats_sa (master only)
+
+Paper-audit columns (added)
+---------------------------
+To support EJOR-standard fairness and reproducibility auditing, each solver row
+now also logs:
+    budget_total_flips, target_flips_used,
+    echo_final_stage_flips, echo_final_stage_frac,
+    echo_tau0, echo_num_stages, echo_best_stage
+
+These columns let you report (and defend) whether you equalize:
+  • total flips (continuation budget), and/or
+  • flips on the true target QUBO (final stage of ECHO vs all of SA).
 """
 
 from __future__ import annotations
@@ -57,7 +69,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
@@ -105,9 +117,22 @@ _BASE_COLS = [
     "eigen_min", "eigen_max", "condition_number", "neg_eigs",
     "edge_prob", "num_edges", "k_frac", "K_card", "penalty_weight",
     "kappa_target", "neg_frac",
+
+    # --- Paper-audit / fairness columns (added; no impact on solver logic) ---
+    "budget_total_flips",          # total flip budget allocated to the solver for this instance
+    "target_flips_used",           # flips used on the true target QUBO (SA: all; ECHO: final stage)
+    "echo_final_stage_flips",      # ECHO only: final stage budget (t=1)
+    "echo_final_stage_frac",       # ECHO only: final stage budget fraction
+    "echo_tau0",                   # ECHO only: tau0 used for continuation
+    "echo_num_stages",             # ECHO only: number of stages
+    "echo_best_stage",             # ECHO only: stage index where best solution first appears
 ]
-_MASTER_EXTRA = ["sa_raw_objective", "sa_echo_raw_objective",
-                 "gap_echo_to_sa", "echo_beats_sa", "echo_ties_sa", "echo_loses_sa"]
+_MASTER_EXTRA = [
+    "sa_raw_objective", "sa_echo_raw_objective",
+    "gap_echo_to_sa", "echo_beats_sa", "echo_ties_sa", "echo_loses_sa",
+    # Pairing health check (added): avoids silent row drops due to partial runs
+    "pair_complete",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -144,9 +169,18 @@ def _auto_temperature(Q: np.ndarray, n_samples: int = 200,
         vn = v.copy(); vn[i] = 1.0 - vn[i]
         de = abs(float(vn @ Q @ vn) - float(v @ Q @ v))
         des.append(de)
-    T0   = max(1.0, float(np.mean(des)))
-    Tend = T0 * 1e-3
-    return T0, Tend
+        # Auto-calibrate temperature to the *actual* single-flip scale of this Q.
+        # NOTE: The previous clamp T0>=1.0 breaks families whose typical |dE| < 1
+        # (e.g., spectral_dense), forcing T0=1 and making SA a near-random walk.
+        T0 = float(np.mean(des))
+
+        # Numerical safety only (do NOT distort scaling):
+        # - Ensure strictly positive so exp(-dE/T) never divides by zero.
+        # - Keep Tend away from 0 to avoid underflow.
+        T0 = max(T0, 1e-9)
+        Tend = max(T0 * 1e-3, 1e-12)
+
+        return T0, Tend
 
 
 
@@ -654,26 +688,33 @@ def _check_feasible(solution: np.ndarray, family: str, meta: Dict) -> int:
 # Skip / resume logic
 # ---------------------------------------------------------------------------
 
-def _already_computed(csv_path: Path, family: str, instance_id: str,
-                       seed: int, N: int, solver: str) -> bool:
+def _load_done_keys(csv_path: Path) -> Set[Tuple[str, str, int, int, str]]:
     """
-    Return True if a row matching (family, instance_id, seed, N, solver)
-    is already present in csv_path.  Returns False if the file doesn't exist.
+    Load already-computed rows into a set of keys for O(1) resume checks.
+
+    Key schema:
+        (benchmark_family, instance_id, seed, N, solver)
+
+    This replaces the previous O(rows) re-read per instance and makes
+    resume-safe runs fast and reliable at scale.
     """
     if not csv_path.exists():
-        return False
+        return set()
     try:
-        df = pd.read_csv(csv_path)
-        mask = (
-            (df["benchmark_family"] == family)
-            & (df["instance_id"]      == instance_id)
-            & (df["seed"]             == seed)
-            & (df["N"]                == N)
-            & (df["solver"]           == solver)
+        df = pd.read_csv(
+            csv_path,
+            usecols=["benchmark_family", "instance_id", "seed", "N", "solver"],
         )
-        return bool(mask.any())
+        return set(map(tuple, df.values.tolist()))
     except Exception:
-        return False
+        # If the CSV is malformed/partial, fall back to empty; the run will
+        # recompute missing outputs rather than silently skipping them.
+        return set()
+
+
+def _key(family: str, instance_id: str, seed: int, N: int, solver: str) -> Tuple[str, str, int, int, str]:
+    """Helper: build a standardized resume key tuple."""
+    return (family, instance_id, int(seed), int(N), str(solver))
 
 
 def _append_row(csv_path: Path, row: Dict[str, Any]) -> None:
@@ -695,6 +736,7 @@ def build_master(family: str, results_dir: Path) -> Optional[pd.DataFrame]:
     Join sa_results.csv and sa_echo_results.csv into results_master.csv.
 
     Adds gap_echo_to_sa, echo_beats_sa, echo_ties_sa, echo_loses_sa.
+    Adds pair_complete to prevent silent row drops when a run is partial.
     Returns the master DataFrame, or None if source files are missing.
     """
     sa_csv   = results_dir / "sa_results.csv"
@@ -714,30 +756,59 @@ def build_master(family: str, results_dir: Path) -> Optional[pd.DataFrame]:
     echo_df = pd.read_csv(echo_csv)
 
     key_cols = ["benchmark_family", "instance_id", "seed", "N"]
-    merged   = sa_df[key_cols + ["raw_objective"]].rename(
-                   columns={"raw_objective": "sa_raw_objective"})
-    merged   = merged.merge(
-                   echo_df[key_cols + ["raw_objective"]].rename(
-                       columns={"raw_objective": "sa_echo_raw_objective"}),
-                   on=key_cols, how="inner")
 
-    merged["gap_echo_to_sa"]  = merged["sa_echo_raw_objective"] - merged["sa_raw_objective"]
+    merged = sa_df[key_cols + ["raw_objective"]].rename(
+        columns={"raw_objective": "sa_raw_objective"}
+    )
+
+    merged = merged.merge(
+        echo_df[key_cols + ["raw_objective"]].rename(
+            columns={"raw_objective": "sa_echo_raw_objective"}
+        ),
+        on=key_cols,
+        how="outer",   # IMPORTANT: do not silently drop rows if one solver is missing
+    )
+
+    # Pair completeness indicator
+    merged["pair_complete"] = (
+        (~merged["sa_raw_objective"].isna()) & (~merged["sa_echo_raw_objective"].isna())
+    ).astype(int)
+
+    # Compute gap + win/tie/loss only on complete pairs
+    merged["gap_echo_to_sa"] = np.nan
+    complete_mask = merged["pair_complete"] == 1
+    merged.loc[complete_mask, "gap_echo_to_sa"] = (
+        merged.loc[complete_mask, "sa_echo_raw_objective"]
+        - merged.loc[complete_mask, "sa_raw_objective"]
+    )
+
     tol = 1e-6
-    merged["echo_beats_sa"]   = (merged["gap_echo_to_sa"] < -tol).astype(int)
-    merged["echo_ties_sa"]    = (merged["gap_echo_to_sa"].abs() <= tol).astype(int)
-    merged["echo_loses_sa"]   = (merged["gap_echo_to_sa"] >  tol).astype(int)
+    merged["echo_beats_sa"] = 0
+    merged["echo_ties_sa"]  = 0
+    merged["echo_loses_sa"] = 0
+    merged.loc[complete_mask, "echo_beats_sa"] = (merged.loc[complete_mask, "gap_echo_to_sa"] < -tol).astype(int)
+    merged.loc[complete_mask, "echo_ties_sa"]  = (merged.loc[complete_mask, "gap_echo_to_sa"].abs() <= tol).astype(int)
+    merged.loc[complete_mask, "echo_loses_sa"] = (merged.loc[complete_mask, "gap_echo_to_sa"] >  tol).astype(int)
 
-    # Attach spectral and meta columns from echo output
+    # Attach spectral and meta columns from echo output (including new audit cols)
     extra_cols = [c for c in _BASE_COLS
                   if c not in key_cols + ["solver", "raw_objective",
                                           "energy_total", "is_feasible", "runtime_sec"]]
-    merged = merged.merge(echo_df[key_cols + extra_cols].drop_duplicates(key_cols),
-                          on=key_cols, how="left")
+    merged = merged.merge(
+        echo_df[key_cols + extra_cols].drop_duplicates(key_cols),
+        on=key_cols,
+        how="left",
+    )
 
     master_path = results_dir / "results_master.csv"
     merged.to_csv(master_path, index=False)
-    print(f"  [master] Written: {master_path.relative_to(_ROOT)}"
-          f"  ({len(merged)} rows)")
+
+    n_all = len(merged)
+    n_complete = int(merged["pair_complete"].sum())
+    n_missing = n_all - n_complete
+    print(f"  [master] Written: {master_path.relative_to(_ROOT)}  ({n_all} rows)")
+    if n_missing > 0:
+        print(f"           Warning: {n_missing} rows are incomplete pairs (SA or ECHO missing).")
     return merged
 
 
@@ -829,11 +900,10 @@ def _check_sa_mobility(Q: np.ndarray, N: int, family: str, seed: int = 1234) -> 
     Runs 200 SA warmup steps using the same T0 from _auto_temperature(Q),
     then measures accept_rate, mean_abs_dE, and ratio = T0 / mean_abs_dE.
 
-    ratio < 0.05  ->  SA FROZEN: T0 covers < 5% of typical move cost.
-                      Uphill moves are always rejected. SA cannot escape
-                      local minima. Catches the original T0=5 / energy~180
-                      mismatch bug even when raw accept rate looks ok (22%).
-    accept > 99%  ->  SA TOO HOT: random walk, no exploitation.
+    ratio < 0.2   ->  SA FROZEN: T0 covers < 20% of typical move cost.
+                      Uphill moves are mostly rejected; SA cannot reliably escape
+                      local minima. This catches energy-scale mismatches.
+    accept > 85%  ->  SA TOO HOT: near-random walk, insufficient exploitation.
     """
     T0, _ = _auto_temperature(Q)
     rng   = np.random.default_rng(seed)
@@ -903,12 +973,14 @@ def _run_preflight(family: str, gen_kwargs: Dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 def _print_summary(family: str, master_df: pd.DataFrame) -> None:
-    n      = len(master_df)
-    wins   = int(master_df["echo_beats_sa"].sum())
-    ties   = int(master_df["echo_ties_sa"].sum())
-    losses = int(master_df["echo_loses_sa"].sum())
-    med    = master_df["gap_echo_to_sa"].median()
-    print(f"\n  {family} — SA-ECHO vs SA  ({n} instances)")
+    # For headline stats, only count complete pairs.
+    df = master_df[master_df.get("pair_complete", 1) == 1].copy()
+    n      = len(df)
+    wins   = int(df["echo_beats_sa"].sum()) if n else 0
+    ties   = int(df["echo_ties_sa"].sum())  if n else 0
+    losses = int(df["echo_loses_sa"].sum()) if n else 0
+    med    = df["gap_echo_to_sa"].median()  if n else float("nan")
+    print(f"\n  {family} — SA-ECHO vs SA  ({n} paired instances)")
     print(f"  Wins  {wins}/{n} ({100*wins//max(n,1)}%)   "
           f"Ties {ties}   Losses {losses}")
     print(f"  Median gap (raw, negative = ECHO better): {med:.4f}")
@@ -993,8 +1065,12 @@ def run_family(
     """
     gen_kwargs  = gen_kwargs or FAMILY_GEN_KWARGS.get(family, {})
 
-    # Archive any existing results before starting a fresh run
-    _archive_results(family)
+    # IMPORTANT (resume-safe):
+    # Only archive existing results when the user explicitly requests a fresh rerun.
+    # If skip_existing=True, the user is resuming; archiving would delete the very
+    # files needed to detect and skip completed runs.
+    if not skip_existing:
+        _archive_results(family)
 
     results_dir = _ROOT / "results" / family
     sa_csv      = results_dir / "sa_results.csv"
@@ -1026,6 +1102,11 @@ def run_family(
         if not csv_path.exists():
             pd.DataFrame(columns=_BASE_COLS).to_csv(csv_path, index=False)
     print(f"  Created results/{family}/  (sa_results.csv + sa_echo_results.csv ready)")
+
+    # Load done-keys once (fast resume-safe skipping).
+    # We also keep these sets updated as we append rows during the run.
+    sa_done_keys   = _load_done_keys(sa_csv)
+    echo_done_keys = _load_done_keys(echo_csv)
 
     # --- Pre-flight sanity checks (abort before wasting time if broken) ---
     try:
@@ -1115,17 +1196,34 @@ def run_family(
         # N * 2000 gives: N=50→100k, N=150→300k, N=300→600k.
         # This matches observed convergence thresholds for both families.
         instance_budget    = N * 2_000
-        sa_steps_per_start = instance_budget // 20   # 20 restarts
+
+        # SA: keep 20 restarts, but ensure EXACT total flip count equals instance_budget.
+        # The previous integer division would drop remainders silently.
+        num_starts = 20
+        base_steps = instance_budget // num_starts
+        rem_steps  = instance_budget %  num_starts
+        # We pass a per-start steps value to run_sa_multistart; it uses constant steps_per_start.
+        # To keep changes minimal and preserve existing SA code, we choose steps_per_start=base_steps
+        # and accept that total may be slightly under budget when rem_steps>0.
+        # However, we log budget_total_flips as instance_budget (allocated) and
+        # target_flips_used as num_starts*base_steps (executed) for audit clarity.
+        sa_steps_per_start = base_steps
+
+        sa_executed_flips = num_starts * sa_steps_per_start  # <= instance_budget (exactly equal when rem_steps=0)
 
         # ---- SA ----
-        sa_done = _already_computed(sa_csv, family, instance_id, seed, N, "sa")
+        sa_key = _key(family, instance_id, seed, N, "sa")
+        sa_done = (sa_key in sa_done_keys)
         if skip_existing and sa_done:
             skipped += 1
             _bar_update(f"skip sa  | N={N} seed={seed}")
         else:
             _bar_update(f"running sa      N={N} seed={seed}")
-            sa_res  = run_sa_multistart(Q_eval, N, seed,
-                                        steps_per_start=sa_steps_per_start)
+            sa_res  = run_sa_multistart(
+                Q_eval, N, seed,
+                num_starts=num_starts,
+                steps_per_start=sa_steps_per_start,
+            )
             sa_eval = float(qubo_energy(Q_eval, sa_res["solution"]))
             sa_row  = {
                 **base_row,
@@ -1134,13 +1232,24 @@ def run_family(
                 "energy_total":  sa_eval,
                 "is_feasible":   _check_feasible(sa_res["solution"], family, meta),
                 "runtime_sec":   round(sa_res["runtime"], 3),
+
+                # --- audit columns ---
+                "budget_total_flips": int(instance_budget),       # allocated budget
+                "target_flips_used":  int(sa_executed_flips),     # executed flips on target (SA uses target always)
+                "echo_final_stage_flips": None,
+                "echo_final_stage_frac":  None,
+                "echo_tau0":              None,
+                "echo_num_stages":        None,
+                "echo_best_stage":        None,
             }
             _append_row(sa_csv, {c: sa_row.get(c) for c in _BASE_COLS})
+            sa_done_keys.add(sa_key)  # keep resume set up to date
             completed_sa += 1
             _bar_update(f"done sa  {sa_eval:+.2f} | N={N} seed={seed}")
 
         # ---- ECHO-SA ----
-        echo_done = _already_computed(echo_csv, family, instance_id, seed, N, "sa_echo")
+        echo_key = _key(family, instance_id, seed, N, "sa_echo")
+        echo_done = (echo_key in echo_done_keys)
         if skip_existing and echo_done:
             skipped += 1
             _bar_update(f"skip echo| N={N} seed={seed}")
@@ -1149,18 +1258,26 @@ def run_family(
             # seed + 1_000_000: ECHO must explore different initial states than SA.
             # Same seed -> identical rng -> identical stage-0 restarts -> ties.
             echo_res  = run_echo_benchmark(
-                            Q_base, Q_pen, w_pen, N, seed + 1_000_000,
-                            params={
-                                "total_budget": instance_budget,
-                                "family":       family,
-                                "K_card":       int(meta.get("K_card") or 0),
-                                "echo_debug":   echo_debug,
-                            })
+                Q_base, Q_pen, w_pen, N, seed + 1_000_000,
+                params={
+                    "total_budget": instance_budget,
+                    "family":       family,
+                    "K_card":       int(meta.get("K_card") or 0),
+                    "echo_debug":   echo_debug,
+                }
+            )
             # Portfolio debug table
             if echo_debug and family == "portfolio_card" and "debug_rows" in echo_res:
                 _print_portfolio_debug(echo_res, N, seed, instance_budget)
+
             # Re-evaluate on Q_eval (for spectral_dense: Q_base not Q_full)
             echo_eval = float(qubo_energy(Q_eval, echo_res["solution"]))
+
+            # --- audit accounting for ECHO ---
+            budgets = echo_res.get("budgets", [])
+            final_flips = int(budgets[-1]) if budgets else 0
+            final_frac  = float(final_flips) / float(max(instance_budget, 1))
+
             echo_row  = {
                 **base_row,
                 "solver":        "sa_echo",
@@ -1168,8 +1285,18 @@ def run_family(
                 "energy_total":  echo_eval,
                 "is_feasible":   _check_feasible(echo_res["solution"], family, meta),
                 "runtime_sec":   round(echo_res["runtime"], 3),
+
+                # --- audit columns ---
+                "budget_total_flips":      int(instance_budget),   # allocated continuation budget
+                "target_flips_used":       int(final_flips),       # strict target-QUBO flips (final stage only)
+                "echo_final_stage_flips":  int(final_flips),
+                "echo_final_stage_frac":   float(final_frac),
+                "echo_tau0":               float(echo_res.get("tau0", np.nan)),
+                "echo_num_stages":         int(len(echo_res.get("stages", []))),
+                "echo_best_stage":         int(echo_res.get("best_stage", -1)),
             }
             _append_row(echo_csv, {c: echo_row.get(c) for c in _BASE_COLS})
+            echo_done_keys.add(echo_key)  # keep resume set up to date
             completed_echo += 1
             _bar_update(f"done echo{echo_eval:+.2f} | N={N} seed={seed}")
 
@@ -1340,6 +1467,27 @@ def _run_smoke_test(args: "argparse.Namespace") -> None:
         if getattr(args, "echo_debug", False) and solver_name == "sa_echo" and "debug_rows" in res:
             _print_portfolio_debug(res, N, seed, budget)
         eval_energy = float(qubo_energy(Q_eval, res["solution"]))
+
+        # Audit accounting for smoke mode
+        if solver_name == "sa":
+            budget_total_flips = int(budget)
+            target_flips_used  = int((budget // 20) * 20)
+            echo_final_stage_flips = None
+            echo_final_stage_frac  = None
+            echo_tau0              = None
+            echo_num_stages        = None
+            echo_best_stage        = None
+        else:
+            buds = res.get("budgets", [])
+            final_flips = int(buds[-1]) if buds else 0
+            budget_total_flips = int(budget)
+            target_flips_used  = int(final_flips)
+            echo_final_stage_flips = int(final_flips)
+            echo_final_stage_frac  = float(final_flips) / float(max(budget, 1))
+            echo_tau0              = float(res.get("tau0", np.nan))
+            echo_num_stages        = int(len(res.get("stages", [])))
+            echo_best_stage        = int(res.get("best_stage", -1))
+
         row  = {
             "benchmark_family": family,
             "instance_id":      instance_id,
@@ -1361,6 +1509,15 @@ def _run_smoke_test(args: "argparse.Namespace") -> None:
             "penalty_weight":   meta.get("penalty_weight", w_pen),
             "kappa_target":     meta.get("kappa_target"),
             "neg_frac":         meta.get("neg_frac"),
+
+            # --- audit columns ---
+            "budget_total_flips":      budget_total_flips,
+            "target_flips_used":       target_flips_used,
+            "echo_final_stage_flips":  echo_final_stage_flips,
+            "echo_final_stage_frac":   echo_final_stage_frac,
+            "echo_tau0":               echo_tau0,
+            "echo_num_stages":         echo_num_stages,
+            "echo_best_stage":         echo_best_stage,
         }
         results.append(row)
 
