@@ -3,14 +3,14 @@
 ECHO Full Experiment Runner
 ============================
 Runs ECHO on all 520 baseline instances and compares results against
-the baseline_full_results.csv produced by run_baseline_full.py.
+the insurance_baseline_results.csv produced by run_baseline_full.py.
 
 Each instance is identified by the triplet (scenario_id, N, seed), matching
 the experimental corpus defined in Section 4.1 of the accompanying paper.
-Baseline SA and greedy results are read directly from baseline_full_results.csv;
+Baseline SA and greedy results are read directly from insurance_baseline_results.csv;
 no re-running of classical solvers is performed.
 
-Output: results/echo_full_results.csv — one row per instance, containing
+Output: results/insurance_echo_results_master.csv — one row per instance, containing
 ECHO results alongside the corresponding baseline metrics for direct
 paired comparison.
 
@@ -273,7 +273,7 @@ def evaluate_solution(solution, data):
     Returns the raw economic objective f(x) (excluding penalty energies),
     feasibility flags, and decoded product structure (selected bands, feature
     counts). This matches the objective_raw_* reporting convention used in
-    baseline_full_results.csv.
+    insurance_baseline_results.csv.
     """
     N, M, K = data['N'], data['M'], data['K']
     x = solution[:N]
@@ -323,7 +323,7 @@ def run_echo_on_instance(seed, scenario_id, N, data_dir, baseline_row, verbose=F
 
     Loads the pre-built QUBO, decomposes it into components, runs
     spectral_landscape_navigation, evaluates the resulting solution, and
-    joins with the corresponding baseline row from baseline_full_results.csv.
+    joins with the corresponding baseline row from insurance_baseline_results.csv.
 
     The paired gap Δ = echo_raw_objective − sa_raw_objective follows the
     sign convention in Section 4.3: negative values indicate ECHO improvement.
@@ -471,9 +471,9 @@ def main():
                         help="Run a single problem size only.")
     parser.add_argument('--test', type=int, default=None,
                         help="Test mode: run only the first N instances.")
-    parser.add_argument('--baseline', type=str, default='results/baseline_full_results.csv',
-                        help="Path to baseline_full_results.csv.")
-    parser.add_argument('--output', type=str, default='results/echo_full_results.csv',
+    parser.add_argument('--baseline', type=str, default='results/insurance_baseline_results.csv',
+                        help="Path to insurance_baseline_results.csv.")
+    parser.add_argument('--output', type=str, default='results/insurance_echo_results_master.csv',
                         help="Path for output CSV.")
     parser.add_argument('--append', action='store_true',
                         help="Append to an existing output file rather than overwriting.")

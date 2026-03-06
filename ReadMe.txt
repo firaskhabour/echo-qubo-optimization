@@ -2,13 +2,13 @@
 ECHO QUBO OPTIMIZATION FRAMEWORK
 ====================================================================
 
-ECHO: Eigenvalue-Guided Constrained Homotopy Optimization for QUBO
-Experimental Framework for Regulated Health Insurance Plan Design
+ECHO: Eigenvalue-guided Homotopy Optimization for QUBO
+with Application to Health Insurance Plan Design
 
 
 Author
 --------------------------------------------------------------------
-Firas F. Khabour
+Eng. Firas F. Khabour
 Innovestor DMCC
 Dubai, UAE
 
@@ -21,12 +21,22 @@ Dubai, UAE
 This repository contains the complete experimental framework used in
 the research study:
 
-   "Combinatorial Optimization of Regulated Health Insurance Plan
-    Design Using Quadratic Binary Programming"
+   "ECHO: Eigenvalue-guided Homotopy Optimization for QUBO
+   with Application to Health Insurance Plan Design"
 
 The system implements a structured QUBO optimization model for
 regulated health insurance product design and evaluates several
-optimization methods.
+optimization methods including a newly introduced ECHO method.
+
+The system also benchmarks performance of ECHO and Simulated
+Annealing (SA) on additional QUBO families.
+
+The benchmark QUBO families implemented in the repository are:
+
+   • MaxCut
+   • Cardinality-constrained portfolio selection
+   • Spectral-dense random QUBO generators
+
 
 Optimization Methods Implemented
 --------------------------------
@@ -39,29 +49,36 @@ Baseline Methods
 Proposed Method
    • ECHO — Eigenvalue-guided Constrained Homotopy Optimization
 
+
 The repository enables full reproduction of the computational study
 reported in the manuscript.
 
-The experiments evaluate solver performance on:
+The experiments evaluate solver performance on two classes of
+optimization problems:
 
-   • 520 structured QUBO instances
-   • Four insurance design scenarios
-   • Multiple problem sizes
+   • Structured insurance QUBO instances (520 instances across
+     four regulatory scenarios)
 
-Project reference:
-   ECHO for EJOR 2026
+   • Independent QUBO benchmark families used to test the
+     generality of the algorithm beyond the insurance domain.
+
+
+These benchmark experiments demonstrate whether improvements obtained
+by ECHO are driven by spectral structure of the QUBO matrix rather
+than by domain-specific modelling.
+
 
 
 Research Objectives
 -------------------
 
-The study investigates two primary questions:
+The study investigates four primary questions:
 
-   • How spectral conditioning of the QUBO matrix affects
-     heuristic optimization performance
+• Conditioning-aware QUBO metaheuristics.
+• Empirical linkage between spectral conditioning and heuristic performance.
+• A structured QUBO formulation for regulated health insurance plan design.
+• Evidence on when spectral continuation improves optimisation.
 
-   • Whether spectral continuation can improve solution quality
-     under fixed computational budgets
 
 
 
@@ -104,8 +121,8 @@ optimization landscapes that are difficult for classical heuristics.
 The ECHO algorithm addresses this using:
 
    • spectral diagnostics of Q
-   • continuation over penalty intensity
-   • condition-number guided beam search
+   • homotopy continuation over penalty intensity
+   • condition-number guided search
    • roughness-weighted evaluation allocation
 
 
@@ -151,8 +168,8 @@ Source Code
 Results
 
    results/
-       baseline_full_results.csv
-       echo_full_results.csv
+       insurance_baseline_results.csv
+       insurance_echo_results_master.csv
 
        maxcut/
        portfolio_card/
@@ -241,12 +258,11 @@ The program will open an interactive experiment menu.
 ====================================================================
 
    MAIN MENU
-
-      1. Run Full Pipeline
-      2. Run Primary QUBO Pipeline
-      3. Run Benchmark QUBO Families
-      Q. Quit
-
+      
+      1. Run Full Pipeline (option 2 & option 3)"
+      2. Run Primary QUBO Pipeline (Generate instances → Greedy → SA → Gurobi → ECHO-SA)"
+      3. Run Benchmark QUBO Families (Max-Cut, Portfolio, Spectral_dense) → SA → ECHO-SA"
+      Q. Quit"
 
 
 ====================================================================
@@ -268,10 +284,10 @@ This option produces all results used in the manuscript.
 
 
 ====================================================================
-10. OPTION 2 — PRIMARY QUBO EXPERIMENT
+10. OPTION 2 — INSURANCE QUBO EXPERIMENT
 ====================================================================
 
-Runs the insurance optimization study described in the paper.
+Runs the structured insurance QUBO study described in the paper.
 
 Total instances solved:
 
@@ -305,20 +321,28 @@ Total instances:
 
    520
 
-Project reference:
-   ECHO for EJOR 2026
-
 
 
 ====================================================================
 11. OPTION 3 — BENCHMARK QUBO FAMILIES
 ====================================================================
 
-Evaluates solver performance on standard QUBO families:
+This option evaluates solver performance on independent QUBO families
+used in the benchmark study of the paper.
 
-   • maxcut
-   • portfolio_card
-   • spectral_dense
+These experiments test whether the spectral continuation mechanism of
+ECHO generalizes beyond the insurance design application.
+
+Three benchmark QUBO families are implemented.
+
+maxcut
+   Graph partitioning QUBO instances generated from random graphs.
+
+portfolio_card
+   Mean–variance portfolio optimization with cardinality constraints.
+
+spectral_dense
+   Random dense QUBO matrices with controlled eigenvalue dispersion.
 
 
 Solvers used:
@@ -365,16 +389,15 @@ ECHO
 
    Key mechanisms:
 
-      • spectral landscape analysis
-      • adaptive continuation stages
-      • roughness-weighted evaluation allocation
-      • condition-number guided beam search
+      • spectral diagnostics of the QUBO matrix
+      • homotopy continuation over penalty curvature
+      • staged search across continuation levels
+      • adaptive allocation of evaluation budget
 
    Parameters:
 
       maximum stages    = 8
       initial restarts  = 40
-      beam size range   = 10 – 40
 
 
 
@@ -390,14 +413,9 @@ Generation steps:
    1. Member risk scores from lognormal distribution
    2. Claim frequency from Poisson process
    3. Claim severity from lognormal distribution
-   4. Claims assigned to 12 healthcare categories
+   4. Claims assigned to healthcare service categories
 
 This produces realistic cost structures and covariance matrices.
-
-These values determine:
-
-   • feature expected costs
-   • risk covariance matrix
 
 
 
@@ -426,7 +444,7 @@ Constraints encoded as quadratic penalties:
 15. OUTPUT FILES
 ====================================================================
 
-baseline_full_results.csv
+insurance_baseline_results.csv
 
 Results for:
 
@@ -435,33 +453,9 @@ Results for:
    • Gurobi
 
 
-Key columns:
+insurance_echo_results_master.csv
 
-   objective_raw_sa_best
-   objective_raw_greedy
-   objective_raw_gurobi
-
-   energy_sa
-   energy_greedy
-
-   Q_condition_number
-   Q_eigenvalue_min
-   Q_eigenvalue_max
-
-
-
-echo_full_results.csv
-
-Results for ECHO.
-
-Important fields:
-
-   echo_raw_objective
-   echo_energy
-   echo_runtime_sec
-   echo_num_stages
-   echo_beam_size
-
+Results for ECHO optimization.
 
 
 ====================================================================
@@ -480,8 +474,6 @@ Represents the economic objective:
    + risk
    − premium revenue
 
-Used for solver comparison.
-
 
 QUBO energy
 
@@ -492,64 +484,27 @@ Includes penalty contributions and is used internally by solvers.
 
 
 ====================================================================
-17. FEASIBILITY METRICS
-====================================================================
-
-Solutions are validated against:
-
-   • one-hot premium selection
-   • one-hot deductible selection
-   • regulatory constraints
-   • affordability constraints
-
-Final feasibility indicator:
-
-   is_feasible
-
-
-
-====================================================================
-18. ENERGY DECOMPOSITION VALIDATION
-====================================================================
-
-For every solution vector:
-
-        vᵀ Q v
-
-is verified to equal:
-
-        raw objective + penalty contributions
-
-Solutions failing this validation are rejected.
-
-No violations occurred across the full corpus.
-
-
-
-====================================================================
-19. BENCHMARK RESULT FILES
+17. BENCHMARK RESULT FILES
 ====================================================================
 
 Each benchmark family produces:
 
-   sa_results.csv
-   sa_echo_results.csv
-   results_master.csv
+   maxcut_sa_results.csv
+   maxcut_echo_results.csv
+   maxcut_results_master.csv
 
-The file "results_master.csv" contains paired solver comparisons.
+   portfolio_card_sa_results.csv
+   portfolio_card_echo_results.csv
+   portfolio_card_results_master.csv
 
-Metrics include:
-
-   raw objective
-   energy
-   runtime
-   condition number
-   negative eigenvalue count
+   spectral_dense_sa_results.csv
+   spectral_dense_echo_results.csv
+   spectral_dense_results_master.csv
 
 
 
 ====================================================================
-20. PREFLIGHT VALIDATION
+18. PREFLIGHT VALIDATION
 ====================================================================
 
 Before each benchmark run the system verifies:
@@ -558,18 +513,10 @@ Before each benchmark run the system verifies:
    • annealing temperature calibration
    • acceptance ratio
 
-Runs automatically abort if:
-
-   • SA frozen
-   • SA too hot
-   • penalty scaling invalid
-
-This protects experimental integrity.
-
 
 
 ====================================================================
-21. REPRODUCIBILITY
+19. REPRODUCIBILITY
 ====================================================================
 
 Experiments are deterministic given:
@@ -578,17 +525,10 @@ Experiments are deterministic given:
    • scenario configuration
    • solver parameters
 
-The system records:
-
-   • QUBO matrices
-   • index maps
-   • run manifests
-   • solver diagnostics
-
 
 
 ====================================================================
-22. RECOMMENDED WORKFLOW
+20. RECOMMENDED WORKFLOW
 ====================================================================
 
 To reproduce the study:

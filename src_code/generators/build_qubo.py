@@ -153,7 +153,7 @@ def _compute_qubo_condition_number(Q: np.ndarray) -> dict:
     Uses np.linalg.eigvalsh (symmetric eigensolver) for numerical stability.
 
     Returns a dict suitable for inclusion in the index-map diagnostics block
-    and in baseline_full_results.csv.
+    and in insurance_baseline_results.csv.
     """
     try:
         # Symmetric eigensolver is faster and more stable than the general eig

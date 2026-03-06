@@ -2,7 +2,7 @@
 PROJECT DUMP (TREE + SELECTED CONTENT)
 ==============================================================================================================
 Root:      C:\Users\HP\insurance-quantum
-Generated: 2026-03-05 07:28:10.792917
+Generated: 2026-03-06 06:15:23.219511
 Content export:
   - .py/.yaml/.yml full content
   - CSV header only for CSV under results/
@@ -34,19 +34,19 @@ insurance-quantum/
 │       └── (other seeds) seed_1001, seed_1002, ..., seed_9999
 ├── results/
 │   ├── maxcut/
-│   │   ├── results_master.csv
+│   │   ├── results_master_Maxcut.csv
 │   │   ├── sa_echo_results.csv
 │   │   └── sa_results.csv
 │   ├── portfolio_card/
-│   │   ├── results_master.csv
+│   │   ├── results_master_portfolio_card.csv
 │   │   ├── sa_echo_results.csv
 │   │   └── sa_results.csv
 │   ├── spectral_dense/
-│   │   ├── results_master.csv
+│   │   ├── results_master_Spectral_dense.csv
 │   │   ├── sa_echo_results.csv
 │   │   └── sa_results.csv
 │   ├── baseline_full_results.csv
-│   └── echo_full_results.csv
+│   └── results_master_InsuranceQubo.csv
 │   JSON files (count=521, example=run_manifest.json)
 ├── src_code/
 │   ├── generators/
@@ -144,7 +144,7 @@ qubo_generation:
   sigma_scale: 1.0
 
 notes:
-  random_seeds_policy: "Seeds are controlled by config/experiment_plan.yaml and run_experiments.py"
+  random_seeds_policy: "Seeds are controlled by config/experiment_plan.yaml and run_baseline_full.py"
 
 ##############################################################################################################
 # FILE: config\config_qubo_S1.yaml
@@ -696,14 +696,7 @@ CSV HEADER ONLY:
 sweep_type,perturb_param,perturb_factor,scenario_id,scenario_name,seed,N,M,K,L_reg_slack,n_total,Q_condition_number,Q_eigenvalue_min,Q_eigenvalue_max,Q_eigenvalue_count_negative,energy_greedy,objective_raw_greedy,penE_onehot_greedy,penE_reg_greedy,penE_afford_greedy,penE_total_greedy,viol_onehot_y_greedy,viol_onehot_z_greedy,viol_reg_shortfall_greedy,viol_afford_greedy,chosen_premium_band_greedy,chosen_deductible_band_greedy,selected_features_count_greedy,selected_reg_features_count_greedy,onehot_ok_greedy,reg_satisfied_greedy,affordability_satisfied_greedy,is_feasible_greedy,energy_sa_best,objective_raw_sa_best,penE_onehot_sa,penE_reg_sa,penE_afford_sa,penE_total_sa,viol_onehot_y_sa,viol_onehot_z_sa,viol_reg_shortfall_sa,viol_afford_sa,chosen_premium_band_sa,chosen_deductible_band_sa,selected_features_count_sa,selected_reg_features_count_sa,onehot_ok_sa,reg_satisfied_sa,affordability_satisfied_sa,is_feasible_sa,greedy_runtime_sec,sa_runtime_sec,sa_best_found_at_step,sa_convergence_fraction,total_classical_runtime_sec,gap_greedy_to_sa_energy,gap_greedy_to_sa_raw,R_size,Rmin,lambda_risk,affordability_enabled,use_tight_regulation,scale_factor,A_onehot,B_reg,D_afford,qterm_total_greedy_signed,qterm_total_sa_signed,qterm_total_gurobi_signed,gurobi_ran,energy_gurobi,objective_raw_gurobi,penE_onehot_gurobi,penE_reg_gurobi,penE_afford_gurobi,penE_total_gurobi,viol_onehot_y_gurobi,viol_onehot_z_gurobi,viol_reg_shortfall_gurobi,viol_afford_gurobi,chosen_premium_band_gurobi,chosen_deductible_band_gurobi,selected_features_count_gurobi,selected_reg_features_count_gurobi,onehot_ok_gurobi,reg_satisfied_gurobi,affordability_satisfied_gurobi,is_feasible_gurobi,gurobi_status_code,gurobi_status_name,gurobi_mip_gap,gurobi_runtime_sec,gap_sa_to_gurobi_energy,gap_sa_to_gurobi_raw,gurobi_mode,gurobi_time_limit_used
 
 ##############################################################################################################
-# FILE: results\echo_full_results.csv
-##############################################################################################################
-
-CSV HEADER ONLY:
-scenario_id,scenario_name,seed,N,M,K,L,echo_raw_objective,echo_energy,echo_feasible,echo_runtime_sec,echo_chosen_premium_band,echo_chosen_deductible_band,echo_selected_features_count,echo_selected_reg_features_count,echo_tau0,echo_num_stages,echo_best_stage,echo_steps_used,echo_final_condition_number,echo_final_negative_eigs,echo_final_roughness,sa_raw_objective,sa_energy,sa_feasible,sa_runtime_sec,greedy_raw_objective,greedy_energy,greedy_feasible,gurobi_ran,gurobi_raw_objective,gurobi_energy,gurobi_feasible,gurobi_status,gap_echo_to_sa,gap_echo_to_greedy,gap_echo_to_gurobi,echo_beats_sa,echo_ties_sa,echo_loses_sa,echo_beats_greedy,echo_ties_greedy,echo_beats_gurobi,echo_ties_gurobi,echo_loses_gurobi,w_onehot,w_reg,w_aff
-
-##############################################################################################################
-# FILE: results\maxcut\results_master.csv
+# FILE: results\maxcut\results_master_Maxcut.csv
 ##############################################################################################################
 
 CSV HEADER ONLY:
@@ -724,7 +717,7 @@ CSV HEADER ONLY:
 benchmark_family,instance_id,seed,N,solver,raw_objective,energy_total,is_feasible,runtime_sec,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac
 
 ##############################################################################################################
-# FILE: results\portfolio_card\results_master.csv
+# FILE: results\portfolio_card\results_master_portfolio_card.csv
 ##############################################################################################################
 
 CSV HEADER ONLY:
@@ -745,7 +738,14 @@ CSV HEADER ONLY:
 benchmark_family,instance_id,seed,N,solver,raw_objective,energy_total,is_feasible,runtime_sec,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
 
 ##############################################################################################################
-# FILE: results\spectral_dense\results_master.csv
+# FILE: results\results_master_InsuranceQubo.csv
+##############################################################################################################
+
+CSV HEADER ONLY:
+scenario_id,scenario_name,seed,N,M,K,L,echo_raw_objective,echo_energy,echo_feasible,echo_runtime_sec,echo_chosen_premium_band,echo_chosen_deductible_band,echo_selected_features_count,echo_selected_reg_features_count,echo_tau0,echo_num_stages,echo_best_stage,echo_steps_used,echo_final_condition_number,echo_final_negative_eigs,echo_final_roughness,sa_raw_objective,sa_energy,sa_feasible,sa_runtime_sec,greedy_raw_objective,greedy_energy,greedy_feasible,gurobi_ran,gurobi_raw_objective,gurobi_energy,gurobi_feasible,gurobi_status,gap_echo_to_sa,gap_echo_to_greedy,gap_echo_to_gurobi,echo_beats_sa,echo_ties_sa,echo_loses_sa,echo_beats_greedy,echo_ties_greedy,echo_beats_gurobi,echo_ties_gurobi,echo_loses_gurobi,w_onehot,w_reg,w_aff
+
+##############################################################################################################
+# FILE: results\spectral_dense\results_master_Spectral_dense.csv
 ##############################################################################################################
 
 CSV HEADER ONLY:
@@ -1239,7 +1239,7 @@ def _compute_qubo_condition_number(Q: np.ndarray) -> dict:
     Uses np.linalg.eigvalsh (symmetric eigensolver) for numerical stability.
 
     Returns a dict suitable for inclusion in the index-map diagnostics block
-    and in baseline_full_results.csv.
+    and in insurance_baseline_results.csv.
     """
     try:
         # Symmetric eigensolver is faster and more stable than the general eig
@@ -2263,12 +2263,12 @@ if __name__ == "__main__":
 # FILE: src_code\runners\run_baseline_full.py
 ##############################################################################################################
 
-# src_code/runners/run_experiments.py
+# src_code/runners/run_baseline_full.py
 """
 Full Experiment Sweep Orchestrator
 ====================================
 Runs the complete computational study described in Section 4 of the
-accompanying paper, producing baseline_full_results.csv and a run manifest.
+accompanying paper, producing insurance_baseline_results.csv and a run manifest.
 
 Pipeline per instance:
     1. Seed data is generated once per seed at regime master N via
@@ -2290,8 +2290,8 @@ Sweep modes:
                         scenarios, using a 7,200 s time limit (Section 4.2).
 
 Outputs:
-    results/baseline_full_results.csv   -- consolidated per-instance results
-    results/run_manifest.json           -- full provenance and CLI arguments
+    results/insurance_baseline_results.csv   -- consolidated per-instance results
+    results/run_manifest.json                -- full provenance and CLI arguments
 """
 
 import argparse
@@ -2779,7 +2779,7 @@ def main():
 
     # Core controls
     ap.add_argument("--fresh", action="store_true",
-                    help="Delete results/baseline_full_results.csv before starting.")
+                    help="Delete results/insurance_baseline_results.csv before starting.")
     ap.add_argument("--no_auto_generate_seed_data", action="store_true",
                     help="Disable automatic seed data generation (fail if directory is missing).")
     ap.add_argument("--no_extract_parameters", action="store_true",
@@ -2916,7 +2916,7 @@ def main():
     # Output CSV: header is defined as an ordered list so that dict-based
     # row construction is safe against column misalignment.
     # ------------------------------------------------------------------
-    out_csv = results_dir / "baseline_full_results.csv"
+    out_csv = results_dir / "insurance_baseline_results.csv"
     if args.fresh and out_csv.exists():
         out_csv.unlink()
 
@@ -3480,15 +3480,15 @@ Hidden developer flag  (not shown in any menu):
   --dev_fast behaviour:
       - Generates instances only if their data doesn't already exist.
       - Skips SA for any (family, instance_id, seed, N) already in the
-        SA result CSV.
-      - Skips SA-ECHO for any already in the SA-ECHO result CSV.
+        family-specific SA result CSV.
+      - Skips SA-ECHO for any already in the family-specific ECHO result CSV.
       - Always rebuilds the merged/master CSV at the end.
 
 Result paths
 ------------
-    results/<family>/sa_results.csv
-    results/<family>/sa_echo_results.csv
-    results/<family>/results_master.csv   (merged, paired)
+    results/<family>/<family>_sa_results.csv
+    results/<family>/<family>_echo_results.csv
+    results/<family>/<family>_results_master.csv (merged, paired)
 
 Each result row schema
 ----------------------
@@ -4183,14 +4183,16 @@ def _append_row(csv_path: Path, row: Dict[str, Any]) -> None:
 
 def build_master(family: str, results_dir: Path) -> Optional[pd.DataFrame]:
     """
-    Join sa_results.csv and sa_echo_results.csv into results_master.csv.
+    Join <family>_sa_results.csv and <family>_echo_results.csv into
+    <family>_results_master.csv.
 
     Adds gap_echo_to_sa, echo_beats_sa, echo_ties_sa, echo_loses_sa.
     Adds pair_complete to prevent silent row drops when a run is partial.
     Returns the master DataFrame, or None if source files are missing.
     """
-    sa_csv   = results_dir / "sa_results.csv"
-    echo_csv = results_dir / "sa_echo_results.csv"
+    sa_csv      = results_dir / f"{family}_sa_results.csv"
+    echo_csv    = results_dir / f"{family}_echo_results.csv"
+    master_path = results_dir / f"{family}_results_master.csv"
 
     missing = []
     if not sa_csv.exists():
@@ -4250,7 +4252,6 @@ def build_master(family: str, results_dir: Path) -> Optional[pd.DataFrame]:
         how="left",
     )
 
-    master_path = results_dir / "results_master.csv"
     merged.to_csv(master_path, index=False)
 
     n_all = len(merged)
@@ -4523,8 +4524,9 @@ def run_family(
         _archive_results(family)
 
     results_dir = _ROOT / "results" / family
-    sa_csv      = results_dir / "sa_results.csv"
-    echo_csv    = results_dir / "sa_echo_results.csv"
+    sa_csv      = results_dir / f"{family}_sa_results.csv"
+    echo_csv    = results_dir / f"{family}_echo_results.csv"
+    master_csv  = results_dir / f"{family}_results_master.csv"
 
     instances = [(N, seed) for N in N_list for seed in seeds]
     n_inst    = len(instances)
@@ -4537,8 +4539,9 @@ def run_family(
     print(f"  Seeds     : {seeds[0]}..{seeds[-1]}  ({len(seeds)} seeds)")
     print(f"  Instances : {n_inst}  (SA + ECHO-SA per instance = {n_steps} steps)")
     print(f"  Mode      : {'skip existing (resume-safe)' if skip_existing else 'force rerun'}")
-    print(f"  Output    : results/{family}/sa_results.csv  (written after every SA)")
-    print(f"              results/{family}/sa_echo_results.csv  (written after every ECHO-SA)")
+    print(f"  Output    : results/{family}/{family}_sa_results.csv  (written after every SA)")
+    print(f"              results/{family}/{family}_echo_results.csv  (written after every ECHO-SA)")
+    print(f"              results/{family}/{family}_results_master.csv  (rebuilt at end)")
     # Rough timing guidance so the user knows what to expect
     print(f"  Estimated : ~0.3-5s per step depending on N  "
           f"(N=50 ≈ 0.3s, N=300 ≈ 5s per solver)")
@@ -4551,7 +4554,10 @@ def run_family(
     for csv_path in (sa_csv, echo_csv):
         if not csv_path.exists():
             pd.DataFrame(columns=_BASE_COLS).to_csv(csv_path, index=False)
-    print(f"  Created results/{family}/  (sa_results.csv + sa_echo_results.csv ready)")
+    print(
+        f"  Created results/{family}/  "
+        f"({family}_sa_results.csv + {family}_echo_results.csv ready)"
+    )
 
     # Load done-keys once (fast resume-safe skipping).
     # We also keep these sets updated as we append rows during the run.
@@ -4992,14 +4998,14 @@ if __name__ == "__main__":
 ECHO Full Experiment Runner
 ============================
 Runs ECHO on all 520 baseline instances and compares results against
-the baseline_full_results.csv produced by run_baseline_full.py.
+the insurance_baseline_results.csv produced by run_baseline_full.py.
 
 Each instance is identified by the triplet (scenario_id, N, seed), matching
 the experimental corpus defined in Section 4.1 of the accompanying paper.
-Baseline SA and greedy results are read directly from baseline_full_results.csv;
+Baseline SA and greedy results are read directly from insurance_baseline_results.csv;
 no re-running of classical solvers is performed.
 
-Output: results/echo_full_results.csv — one row per instance, containing
+Output: results/insurance_echo_results_master.csv — one row per instance, containing
 ECHO results alongside the corresponding baseline metrics for direct
 paired comparison.
 
@@ -5262,7 +5268,7 @@ def evaluate_solution(solution, data):
     Returns the raw economic objective f(x) (excluding penalty energies),
     feasibility flags, and decoded product structure (selected bands, feature
     counts). This matches the objective_raw_* reporting convention used in
-    baseline_full_results.csv.
+    insurance_baseline_results.csv.
     """
     N, M, K = data['N'], data['M'], data['K']
     x = solution[:N]
@@ -5312,7 +5318,7 @@ def run_echo_on_instance(seed, scenario_id, N, data_dir, baseline_row, verbose=F
 
     Loads the pre-built QUBO, decomposes it into components, runs
     spectral_landscape_navigation, evaluates the resulting solution, and
-    joins with the corresponding baseline row from baseline_full_results.csv.
+    joins with the corresponding baseline row from insurance_baseline_results.csv.
 
     The paired gap Δ = echo_raw_objective − sa_raw_objective follows the
     sign convention in Section 4.3: negative values indicate ECHO improvement.
@@ -5460,9 +5466,9 @@ def main():
                         help="Run a single problem size only.")
     parser.add_argument('--test', type=int, default=None,
                         help="Test mode: run only the first N instances.")
-    parser.add_argument('--baseline', type=str, default='results/baseline_full_results.csv',
-                        help="Path to baseline_full_results.csv.")
-    parser.add_argument('--output', type=str, default='results/echo_full_results.csv',
+    parser.add_argument('--baseline', type=str, default='results/insurance_baseline_results.csv',
+                        help="Path to insurance_baseline_results.csv.")
+    parser.add_argument('--output', type=str, default='results/insurance_echo_results_master.csv',
                         help="Path for output CSV.")
     parser.add_argument('--append', action='store_true',
                         help="Append to an existing output file rather than overwriting.")
@@ -6600,7 +6606,7 @@ def simulated_annealing(
 
     Returns (best_v, best_e, diagnostics) where diagnostics records when
     the best solution was found — used in the Section 4.2 budget fairness
-    analysis (sa_convergence_fraction in baseline_full_results.csv).
+    analysis (sa_convergence_fraction in insurance_baseline_results.csv).
     """
     n = Q.shape[0]
     v = rng.integers(0, 2, size=n).astype(float)
@@ -6695,7 +6701,7 @@ def simulated_annealing_multistart(
     that results are fully reproducible from base_seed alone.
 
     The diagnostics dict from the best-performing start is retained so that
-    convergence_fraction in baseline_full_results.csv reflects the run
+    convergence_fraction in insurance_baseline_results.csv reflects the run
     that produced the reported solution.
     """
     best_v          = None
@@ -8335,7 +8341,7 @@ Option 2 calls the two existing runner scripts unchanged:
     src_code/runners/run_echo_full.py       (SA-ECHO vs SA baseline)
 
 Option 3 calls:
-    src_code/runners/run_benchmarks.py      (Max-Cut + Portfolio SA + SA-ECHO)
+    src_code/runners/run_benchmarks.py      (Max-Cut + Portfolio + Spectral_dense for SA + ECHO)
 
 Dependency checks are performed before each option so the user receives
 a clear message and a recovery prompt rather than a crash.
@@ -8466,8 +8472,8 @@ _ECHO_SCRIPT  = ROOT / "src_code" / "runners" / "run_echo_full.py"
 _BENCH_SCRIPT = ROOT / "src_code" / "runners" / "run_benchmarks.py"
 
 # Key result files produced by Option 2
-_BASELINE_CSV = ROOT / "results" / "baseline_full_results.csv"
-_ECHO_CSV     = ROOT / "results" / "echo_full_results.csv"
+_BASELINE_CSV = ROOT / "results" / "insurance_baseline_results.csv"
+_ECHO_CSV     = ROOT / "results" / "insurance_echo_results_master.csv"
 _ECHO_SCRIPT     = ROOT / "src_code" / "runners" / "run_echo_full.py"
 
 # ---------------------------------------------------------------------------
@@ -8567,7 +8573,7 @@ def _insurance_baseline_exists() -> bool:
 
 
 def _insurance_echo_ready() -> bool:
-    """ECHO runner needs baseline_full_results.csv to exist and be non-empty."""
+    """ECHO runner needs insurance_baseline_results.csv to exist and be non-empty."""
     if not _BASELINE_CSV.exists():
         return False
     try:
@@ -8602,8 +8608,9 @@ def _run_option2() -> bool:
     """
     Option 2: Run ECHO SA Benchmark Pipeline.
 
-    Step 1  run_baseline_full.py   → results/baseline_full_results.csv
-    Step 2  run_echo_full.py       → results/echo_full_results.csv
+    Step 1  run_baseline_full.py   → results/insurance_baseline_results.csv
+    Step 2  run_echo_full.py       → results/insurance_echo_results_master.csv
+
 
     If baseline results already exist, Step 1 is skipped and the user is
     informed.  Step 2 requires Step 1 output.
@@ -8625,9 +8632,9 @@ def _run_option2() -> bool:
     print()
     print("  This pipeline runs on the insurance QUBO experiment corpus:")
     print("    Step 1  Generate instances + Greedy + SA + Gurobi")
-    print("            → results/baseline_full_results.csv")
+    print("            → results/insurance_baseline_results.csv")
     print("    Step 2  ECHO-SA vs SA baseline")
-    print("            → results/echo_full_results.csv")
+    print("            → results/insurance_echo_results_master.csv")
 
     # --- Step 1 ---
     if _insurance_baseline_exists():
@@ -8647,7 +8654,7 @@ def _run_option2() -> bool:
 
     # --- Step 2 ---
     if not _insurance_echo_ready():
-        print("\n  [error] baseline_full_results.csv still missing or empty after Step 1.")
+        print("\n  [error] insurance_baseline_results.csv still missing or empty after Step 1.")
         print(f"          Expected: {_BASELINE_CSV.relative_to(ROOT)}")
         return False
 
@@ -8672,12 +8679,16 @@ def _run_option3() -> bool:
       - Portfolio cardinality instances
 
     Results written to:
-      results/maxcut/sa_results.csv
-      results/maxcut/sa_echo_results.csv
-      results/maxcut/results_master.csv
-      results/portfolio_card/sa_results.csv
-      results/portfolio_card/sa_echo_results.csv
-      results/portfolio_card/results_master.csv
+      results/maxcut/maxcut_sa_results.csv
+      results/maxcut/maxcut_echo_results.csv
+      results/maxcut/maxcut_results_master.csv
+      results/portfolio_card/portfolio_card_sa_results.csv
+      results/portfolio_card/portfolio_card_echo_results.csv
+      results/portfolio_card/portfolio_card_results_master.csv
+      results/spectral_dense/spectral_dense_sa_results.csv
+      results/spectral_dense/spectral_dense_echo_results.csv
+      results/spectral_dense/spectral_dense_results_master.csv
+      
     """
     print()
     _hr()
@@ -8693,9 +8704,9 @@ def _run_option3() -> bool:
     print("    sa_echo   — SA-ECHO homotopy (same 800k-step budget)")
     print()
     print("  Outputs per family:")
-    print("    results/<family>/sa_results.csv")
-    print("    results/<family>/sa_echo_results.csv")
-    print("    results/<family>/results_master.csv  (paired SA vs SA-ECHO)")
+    print("    results/<family>/<family>_sa_results.csv")
+    print("    results/<family>/<family>_echo_results.csv")
+    print("    results/<family>/<family>_results_master.csv  (paired SA vs SA-ECHO)")
     print()
 
     print("  Checking required files for Option 3...")

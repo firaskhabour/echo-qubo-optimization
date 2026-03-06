@@ -30,15 +30,15 @@ Hidden developer flag  (not shown in any menu):
   --dev_fast behaviour:
       - Generates instances only if their data doesn't already exist.
       - Skips SA for any (family, instance_id, seed, N) already in the
-        SA result CSV.
-      - Skips SA-ECHO for any already in the SA-ECHO result CSV.
+        family-specific SA result CSV.
+      - Skips SA-ECHO for any already in the family-specific ECHO result CSV.
       - Always rebuilds the merged/master CSV at the end.
 
 Result paths
 ------------
-    results/<family>/sa_results.csv
-    results/<family>/sa_echo_results.csv
-    results/<family>/results_master.csv   (merged, paired)
+    results/<family>/<family>_sa_results.csv
+    results/<family>/<family>_echo_results.csv
+    results/<family>/<family>_results_master.csv (merged, paired)
 
 Each result row schema
 ----------------------
@@ -733,14 +733,16 @@ def _append_row(csv_path: Path, row: Dict[str, Any]) -> None:
 
 def build_master(family: str, results_dir: Path) -> Optional[pd.DataFrame]:
     """
-    Join sa_results.csv and sa_echo_results.csv into results_master.csv.
+    Join <family>_sa_results.csv and <family>_echo_results.csv into
+    <family>_results_master.csv.
 
     Adds gap_echo_to_sa, echo_beats_sa, echo_ties_sa, echo_loses_sa.
     Adds pair_complete to prevent silent row drops when a run is partial.
     Returns the master DataFrame, or None if source files are missing.
     """
-    sa_csv   = results_dir / "sa_results.csv"
-    echo_csv = results_dir / "sa_echo_results.csv"
+    sa_csv      = results_dir / f"{family}_sa_results.csv"
+    echo_csv    = results_dir / f"{family}_echo_results.csv"
+    master_path = results_dir / f"{family}_results_master.csv"
 
     missing = []
     if not sa_csv.exists():
@@ -800,7 +802,6 @@ def build_master(family: str, results_dir: Path) -> Optional[pd.DataFrame]:
         how="left",
     )
 
-    master_path = results_dir / "results_master.csv"
     merged.to_csv(master_path, index=False)
 
     n_all = len(merged)
@@ -1073,8 +1074,9 @@ def run_family(
         _archive_results(family)
 
     results_dir = _ROOT / "results" / family
-    sa_csv      = results_dir / "sa_results.csv"
-    echo_csv    = results_dir / "sa_echo_results.csv"
+    sa_csv      = results_dir / f"{family}_sa_results.csv"
+    echo_csv    = results_dir / f"{family}_echo_results.csv"
+    master_csv  = results_dir / f"{family}_results_master.csv"
 
     instances = [(N, seed) for N in N_list for seed in seeds]
     n_inst    = len(instances)
@@ -1087,8 +1089,9 @@ def run_family(
     print(f"  Seeds     : {seeds[0]}..{seeds[-1]}  ({len(seeds)} seeds)")
     print(f"  Instances : {n_inst}  (SA + ECHO-SA per instance = {n_steps} steps)")
     print(f"  Mode      : {'skip existing (resume-safe)' if skip_existing else 'force rerun'}")
-    print(f"  Output    : results/{family}/sa_results.csv  (written after every SA)")
-    print(f"              results/{family}/sa_echo_results.csv  (written after every ECHO-SA)")
+    print(f"  Output    : results/{family}/{family}_sa_results.csv  (written after every SA)")
+    print(f"              results/{family}/{family}_echo_results.csv  (written after every ECHO-SA)")
+    print(f"              results/{family}/{family}_results_master.csv  (rebuilt at end)")
     # Rough timing guidance so the user knows what to expect
     print(f"  Estimated : ~0.3-5s per step depending on N  "
           f"(N=50 ≈ 0.3s, N=300 ≈ 5s per solver)")
@@ -1101,7 +1104,10 @@ def run_family(
     for csv_path in (sa_csv, echo_csv):
         if not csv_path.exists():
             pd.DataFrame(columns=_BASE_COLS).to_csv(csv_path, index=False)
-    print(f"  Created results/{family}/  (sa_results.csv + sa_echo_results.csv ready)")
+    print(
+        f"  Created results/{family}/  "
+        f"({family}_sa_results.csv + {family}_echo_results.csv ready)"
+    )
 
     # Load done-keys once (fast resume-safe skipping).
     # We also keep these sets updated as we append rows during the run.

@@ -1,9 +1,9 @@
-# src_code/runners/run_experiments.py
+# src_code/runners/run_baseline_full.py
 """
 Full Experiment Sweep Orchestrator
 ====================================
 Runs the complete computational study described in Section 4 of the
-accompanying paper, producing baseline_full_results.csv and a run manifest.
+accompanying paper, producing insurance_baseline_results.csv and a run manifest.
 
 Pipeline per instance:
     1. Seed data is generated once per seed at regime master N via
@@ -25,8 +25,8 @@ Sweep modes:
                         scenarios, using a 7,200 s time limit (Section 4.2).
 
 Outputs:
-    results/baseline_full_results.csv   -- consolidated per-instance results
-    results/run_manifest.json           -- full provenance and CLI arguments
+    results/insurance_baseline_results.csv   -- consolidated per-instance results
+    results/run_manifest.json                -- full provenance and CLI arguments
 """
 
 import argparse
@@ -514,7 +514,7 @@ def main():
 
     # Core controls
     ap.add_argument("--fresh", action="store_true",
-                    help="Delete results/baseline_full_results.csv before starting.")
+                    help="Delete results/insurance_baseline_results.csv before starting.")
     ap.add_argument("--no_auto_generate_seed_data", action="store_true",
                     help="Disable automatic seed data generation (fail if directory is missing).")
     ap.add_argument("--no_extract_parameters", action="store_true",
@@ -651,7 +651,7 @@ def main():
     # Output CSV: header is defined as an ordered list so that dict-based
     # row construction is safe against column misalignment.
     # ------------------------------------------------------------------
-    out_csv = results_dir / "baseline_full_results.csv"
+    out_csv = results_dir / "insurance_baseline_results.csv"
     if args.fresh and out_csv.exists():
         out_csv.unlink()
 

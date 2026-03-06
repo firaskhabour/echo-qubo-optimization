@@ -17,7 +17,7 @@ Option 2 calls the two existing runner scripts unchanged:
     src_code/runners/run_echo_full.py       (SA-ECHO vs SA baseline)
 
 Option 3 calls:
-    src_code/runners/run_benchmarks.py      (Max-Cut + Portfolio SA + SA-ECHO)
+    src_code/runners/run_benchmarks.py      (Max-Cut + Portfolio + Spectral_dense for SA + ECHO)
 
 Dependency checks are performed before each option so the user receives
 a clear message and a recovery prompt rather than a crash.
@@ -148,8 +148,8 @@ _ECHO_SCRIPT  = ROOT / "src_code" / "runners" / "run_echo_full.py"
 _BENCH_SCRIPT = ROOT / "src_code" / "runners" / "run_benchmarks.py"
 
 # Key result files produced by Option 2
-_BASELINE_CSV = ROOT / "results" / "baseline_full_results.csv"
-_ECHO_CSV     = ROOT / "results" / "echo_full_results.csv"
+_BASELINE_CSV = ROOT / "results" / "insurance_baseline_results.csv"
+_ECHO_CSV     = ROOT / "results" / "insurance_echo_results_master.csv"
 _ECHO_SCRIPT     = ROOT / "src_code" / "runners" / "run_echo_full.py"
 
 # ---------------------------------------------------------------------------
@@ -249,7 +249,7 @@ def _insurance_baseline_exists() -> bool:
 
 
 def _insurance_echo_ready() -> bool:
-    """ECHO runner needs baseline_full_results.csv to exist and be non-empty."""
+    """ECHO runner needs insurance_baseline_results.csv to exist and be non-empty."""
     if not _BASELINE_CSV.exists():
         return False
     try:
@@ -284,8 +284,9 @@ def _run_option2() -> bool:
     """
     Option 2: Run ECHO SA Benchmark Pipeline.
 
-    Step 1  run_baseline_full.py   → results/baseline_full_results.csv
-    Step 2  run_echo_full.py       → results/echo_full_results.csv
+    Step 1  run_baseline_full.py   → results/insurance_baseline_results.csv
+    Step 2  run_echo_full.py       → results/insurance_echo_results_master.csv
+
 
     If baseline results already exist, Step 1 is skipped and the user is
     informed.  Step 2 requires Step 1 output.
@@ -307,9 +308,9 @@ def _run_option2() -> bool:
     print()
     print("  This pipeline runs on the insurance QUBO experiment corpus:")
     print("    Step 1  Generate instances + Greedy + SA + Gurobi")
-    print("            → results/baseline_full_results.csv")
+    print("            → results/insurance_baseline_results.csv")
     print("    Step 2  ECHO-SA vs SA baseline")
-    print("            → results/echo_full_results.csv")
+    print("            → results/insurance_echo_results_master.csv")
 
     # --- Step 1 ---
     if _insurance_baseline_exists():
@@ -329,7 +330,7 @@ def _run_option2() -> bool:
 
     # --- Step 2 ---
     if not _insurance_echo_ready():
-        print("\n  [error] baseline_full_results.csv still missing or empty after Step 1.")
+        print("\n  [error] insurance_baseline_results.csv still missing or empty after Step 1.")
         print(f"          Expected: {_BASELINE_CSV.relative_to(ROOT)}")
         return False
 
@@ -354,12 +355,16 @@ def _run_option3() -> bool:
       - Portfolio cardinality instances
 
     Results written to:
-      results/maxcut/sa_results.csv
-      results/maxcut/sa_echo_results.csv
-      results/maxcut/results_master.csv
-      results/portfolio_card/sa_results.csv
-      results/portfolio_card/sa_echo_results.csv
-      results/portfolio_card/results_master.csv
+      results/maxcut/maxcut_sa_results.csv
+      results/maxcut/maxcut_echo_results.csv
+      results/maxcut/maxcut_results_master.csv
+      results/portfolio_card/portfolio_card_sa_results.csv
+      results/portfolio_card/portfolio_card_echo_results.csv
+      results/portfolio_card/portfolio_card_results_master.csv
+      results/spectral_dense/spectral_dense_sa_results.csv
+      results/spectral_dense/spectral_dense_echo_results.csv
+      results/spectral_dense/spectral_dense_results_master.csv
+      
     """
     print()
     _hr()
@@ -375,9 +380,9 @@ def _run_option3() -> bool:
     print("    sa_echo   — SA-ECHO homotopy (same 800k-step budget)")
     print()
     print("  Outputs per family:")
-    print("    results/<family>/sa_results.csv")
-    print("    results/<family>/sa_echo_results.csv")
-    print("    results/<family>/results_master.csv  (paired SA vs SA-ECHO)")
+    print("    results/<family>/<family>_sa_results.csv")
+    print("    results/<family>/<family>_echo_results.csv")
+    print("    results/<family>/<family>_results_master.csv  (paired SA vs SA-ECHO)")
     print()
 
     print("  Checking required files for Option 3...")

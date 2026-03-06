@@ -191,7 +191,7 @@ def simulated_annealing(
 
     Returns (best_v, best_e, diagnostics) where diagnostics records when
     the best solution was found — used in the Section 4.2 budget fairness
-    analysis (sa_convergence_fraction in baseline_full_results.csv).
+    analysis (sa_convergence_fraction in insurance_baseline_results.csv).
     """
     n = Q.shape[0]
     v = rng.integers(0, 2, size=n).astype(float)
@@ -286,7 +286,7 @@ def simulated_annealing_multistart(
     that results are fully reproducible from base_seed alone.
 
     The diagnostics dict from the best-performing start is retained so that
-    convergence_fraction in baseline_full_results.csv reflects the run
+    convergence_fraction in insurance_baseline_results.csv reflects the run
     that produced the reported solution.
     """
     best_v          = None

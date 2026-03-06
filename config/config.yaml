@@ -58,4 +58,4 @@ qubo_generation:
   sigma_scale: 1.0
 
 notes:
-  random_seeds_policy: "Seeds are controlled by config/experiment_plan.yaml and run_experiments.py"
+  random_seeds_policy: "Seeds are controlled by config/experiment_plan.yaml and run_baseline_full.py"
