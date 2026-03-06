@@ -2,7 +2,7 @@
 PROJECT DUMP (TREE + SELECTED CONTENT)
 ==============================================================================================================
 Root:      C:\Users\HP\insurance-quantum
-Generated: 2026-03-06 06:30:37.637239
+Generated: 2026-03-07 03:04:39.168518
 Content export:
   - .py/.yaml/.yml full content
   - CSV header only for CSV under results/
@@ -34,19 +34,21 @@ insurance-quantum/
 │       └── (other seeds) seed_1001, seed_1002, ..., seed_9999
 ├── results/
 │   ├── maxcut/
-│   │   ├── results_master_Maxcut.csv
-│   │   ├── sa_echo_results.csv
-│   │   └── sa_results.csv
+│   │   ├── maxcut_echo_results.csv
+│   │   ├── maxcut_results_master.csv
+│   │   └── maxcut_sa_results.csv
 │   ├── portfolio_card/
-│   │   ├── results_master_portfolio_card.csv
-│   │   ├── sa_echo_results.csv
-│   │   └── sa_results.csv
+│   │   ├── portfolio_card_echo_results.csv
+│   │   ├── portfolio_card_results_master.csv
+│   │   └── portfolio_card_sa_results.csv
 │   ├── spectral_dense/
-│   │   ├── results_master_Spectral_dense.csv
-│   │   ├── sa_echo_results.csv
-│   │   └── sa_results.csv
-│   ├── baseline_full_results.csv
-│   └── results_master_InsuranceQubo.csv
+│   │   ├── spectral_dense_echo_results.csv
+│   │   ├── spectral_dense_results_master.csv
+│   │   └── spectral_dense_sa_results.csv
+│   ├── insurance_baseline_results.csv
+│   ├── insurance_echo_results_master.csv
+│   ├── insurance_robustness_baseline_results.csv
+│   └── robustness_results_master_InsuranceQubo.csv
 │   JSON files (count=521, example=run_manifest.json)
 ├── src_code/
 │   ├── generators/
@@ -357,6 +359,7 @@ solver:
   sa_steps: 40000
   sa_T0: 5.0
   sa_Tend: 0.01
+  sa_auto_temperature: false # Set to false for paper consistency
 
   # multistart budgets
   greedy_num_starts: 20
@@ -689,77 +692,91 @@ if __name__ == "__main__":
     main()
 
 ##############################################################################################################
-# FILE: results\baseline_full_results.csv
+# FILE: results\insurance_baseline_results.csv
 ##############################################################################################################
 
 CSV HEADER ONLY:
 sweep_type,perturb_param,perturb_factor,scenario_id,scenario_name,seed,N,M,K,L_reg_slack,n_total,Q_condition_number,Q_eigenvalue_min,Q_eigenvalue_max,Q_eigenvalue_count_negative,energy_greedy,objective_raw_greedy,penE_onehot_greedy,penE_reg_greedy,penE_afford_greedy,penE_total_greedy,viol_onehot_y_greedy,viol_onehot_z_greedy,viol_reg_shortfall_greedy,viol_afford_greedy,chosen_premium_band_greedy,chosen_deductible_band_greedy,selected_features_count_greedy,selected_reg_features_count_greedy,onehot_ok_greedy,reg_satisfied_greedy,affordability_satisfied_greedy,is_feasible_greedy,energy_sa_best,objective_raw_sa_best,penE_onehot_sa,penE_reg_sa,penE_afford_sa,penE_total_sa,viol_onehot_y_sa,viol_onehot_z_sa,viol_reg_shortfall_sa,viol_afford_sa,chosen_premium_band_sa,chosen_deductible_band_sa,selected_features_count_sa,selected_reg_features_count_sa,onehot_ok_sa,reg_satisfied_sa,affordability_satisfied_sa,is_feasible_sa,greedy_runtime_sec,sa_runtime_sec,sa_best_found_at_step,sa_convergence_fraction,total_classical_runtime_sec,gap_greedy_to_sa_energy,gap_greedy_to_sa_raw,R_size,Rmin,lambda_risk,affordability_enabled,use_tight_regulation,scale_factor,A_onehot,B_reg,D_afford,qterm_total_greedy_signed,qterm_total_sa_signed,qterm_total_gurobi_signed,gurobi_ran,energy_gurobi,objective_raw_gurobi,penE_onehot_gurobi,penE_reg_gurobi,penE_afford_gurobi,penE_total_gurobi,viol_onehot_y_gurobi,viol_onehot_z_gurobi,viol_reg_shortfall_gurobi,viol_afford_gurobi,chosen_premium_band_gurobi,chosen_deductible_band_gurobi,selected_features_count_gurobi,selected_reg_features_count_gurobi,onehot_ok_gurobi,reg_satisfied_gurobi,affordability_satisfied_gurobi,is_feasible_gurobi,gurobi_status_code,gurobi_status_name,gurobi_mip_gap,gurobi_runtime_sec,gap_sa_to_gurobi_energy,gap_sa_to_gurobi_raw,gurobi_mode,gurobi_time_limit_used
 
 ##############################################################################################################
-# FILE: results\maxcut\results_master_Maxcut.csv
-##############################################################################################################
-
-CSV HEADER ONLY:
-benchmark_family,instance_id,seed,N,sa_raw_objective,sa_echo_raw_objective,gap_echo_to_sa,echo_beats_sa,echo_ties_sa,echo_loses_sa,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac
-
-##############################################################################################################
-# FILE: results\maxcut\sa_echo_results.csv
-##############################################################################################################
-
-CSV HEADER ONLY:
-benchmark_family,instance_id,seed,N,solver,raw_objective,energy_total,is_feasible,runtime_sec,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac
-
-##############################################################################################################
-# FILE: results\maxcut\sa_results.csv
-##############################################################################################################
-
-CSV HEADER ONLY:
-benchmark_family,instance_id,seed,N,solver,raw_objective,energy_total,is_feasible,runtime_sec,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac
-
-##############################################################################################################
-# FILE: results\portfolio_card\results_master_portfolio_card.csv
-##############################################################################################################
-
-CSV HEADER ONLY:
-benchmark_family,instance_id,seed,N,sa_raw_objective,sa_echo_raw_objective,pair_complete,gap_echo_to_sa,echo_beats_sa,echo_ties_sa,echo_loses_sa,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
-
-##############################################################################################################
-# FILE: results\portfolio_card\sa_echo_results.csv
-##############################################################################################################
-
-CSV HEADER ONLY:
-benchmark_family,instance_id,seed,N,solver,raw_objective,energy_total,is_feasible,runtime_sec,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
-
-##############################################################################################################
-# FILE: results\portfolio_card\sa_results.csv
-##############################################################################################################
-
-CSV HEADER ONLY:
-benchmark_family,instance_id,seed,N,solver,raw_objective,energy_total,is_feasible,runtime_sec,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
-
-##############################################################################################################
-# FILE: results\results_master_InsuranceQubo.csv
+# FILE: results\insurance_echo_results_master.csv
 ##############################################################################################################
 
 CSV HEADER ONLY:
 scenario_id,scenario_name,seed,N,M,K,L,echo_raw_objective,echo_energy,echo_feasible,echo_runtime_sec,echo_chosen_premium_band,echo_chosen_deductible_band,echo_selected_features_count,echo_selected_reg_features_count,echo_tau0,echo_num_stages,echo_best_stage,echo_steps_used,echo_final_condition_number,echo_final_negative_eigs,echo_final_roughness,sa_raw_objective,sa_energy,sa_feasible,sa_runtime_sec,greedy_raw_objective,greedy_energy,greedy_feasible,gurobi_ran,gurobi_raw_objective,gurobi_energy,gurobi_feasible,gurobi_status,gap_echo_to_sa,gap_echo_to_greedy,gap_echo_to_gurobi,echo_beats_sa,echo_ties_sa,echo_loses_sa,echo_beats_greedy,echo_ties_greedy,echo_beats_gurobi,echo_ties_gurobi,echo_loses_gurobi,w_onehot,w_reg,w_aff
 
 ##############################################################################################################
-# FILE: results\spectral_dense\results_master_Spectral_dense.csv
+# FILE: results\insurance_robustness_baseline_results.csv
 ##############################################################################################################
 
 CSV HEADER ONLY:
-benchmark_family,instance_id,seed,N,sa_raw_objective,sa_echo_raw_objective,pair_complete,gap_echo_to_sa,echo_beats_sa,echo_ties_sa,echo_loses_sa,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
+sweep_type,perturb_param,perturb_factor,scenario_id,scenario_name,seed,N,M,K,L_reg_slack,n_total,Q_condition_number,Q_eigenvalue_min,Q_eigenvalue_max,Q_eigenvalue_count_negative,energy_greedy,objective_raw_greedy,penE_onehot_greedy,penE_reg_greedy,penE_afford_greedy,penE_total_greedy,viol_onehot_y_greedy,viol_onehot_z_greedy,viol_reg_shortfall_greedy,viol_afford_greedy,chosen_premium_band_greedy,chosen_deductible_band_greedy,selected_features_count_greedy,selected_reg_features_count_greedy,onehot_ok_greedy,reg_satisfied_greedy,affordability_satisfied_greedy,is_feasible_greedy,energy_sa_best,objective_raw_sa_best,penE_onehot_sa,penE_reg_sa,penE_afford_sa,penE_total_sa,viol_onehot_y_sa,viol_onehot_z_sa,viol_reg_shortfall_sa,viol_afford_sa,chosen_premium_band_sa,chosen_deductible_band_sa,selected_features_count_sa,selected_reg_features_count_sa,onehot_ok_sa,reg_satisfied_sa,affordability_satisfied_sa,is_feasible_sa,greedy_runtime_sec,sa_runtime_sec,sa_best_found_at_step,sa_convergence_fraction,total_classical_runtime_sec,gap_greedy_to_sa_energy,gap_greedy_to_sa_raw,R_size,Rmin,lambda_risk,affordability_enabled,use_tight_regulation,scale_factor,A_onehot,B_reg,D_afford,qterm_total_greedy_signed,qterm_total_sa_signed,qterm_total_gurobi_signed,gurobi_ran,energy_gurobi,objective_raw_gurobi,penE_onehot_gurobi,penE_reg_gurobi,penE_afford_gurobi,penE_total_gurobi,viol_onehot_y_gurobi,viol_onehot_z_gurobi,viol_reg_shortfall_gurobi,viol_afford_gurobi,chosen_premium_band_gurobi,chosen_deductible_band_gurobi,selected_features_count_gurobi,selected_reg_features_count_gurobi,onehot_ok_gurobi,reg_satisfied_gurobi,affordability_satisfied_gurobi,is_feasible_gurobi,gurobi_status_code,gurobi_status_name,gurobi_mip_gap,gurobi_runtime_sec,gap_sa_to_gurobi_energy,gap_sa_to_gurobi_raw,gurobi_mode,gurobi_time_limit_used,sa_temperature_mode,sa_T0_used,sa_Tend_used,sa_auto_temperature
 
 ##############################################################################################################
-# FILE: results\spectral_dense\sa_echo_results.csv
+# FILE: results\maxcut\maxcut_echo_results.csv
 ##############################################################################################################
 
 CSV HEADER ONLY:
 benchmark_family,instance_id,seed,N,solver,raw_objective,energy_total,is_feasible,runtime_sec,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
 
 ##############################################################################################################
-# FILE: results\spectral_dense\sa_results.csv
+# FILE: results\maxcut\maxcut_results_master.csv
+##############################################################################################################
+
+CSV HEADER ONLY:
+benchmark_family,instance_id,seed,N,sa_raw_objective,sa_echo_raw_objective,pair_complete,gap_echo_to_sa,echo_beats_sa,echo_ties_sa,echo_loses_sa,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
+
+##############################################################################################################
+# FILE: results\maxcut\maxcut_sa_results.csv
+##############################################################################################################
+
+CSV HEADER ONLY:
+benchmark_family,instance_id,seed,N,solver,raw_objective,energy_total,is_feasible,runtime_sec,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
+
+##############################################################################################################
+# FILE: results\portfolio_card\portfolio_card_echo_results.csv
+##############################################################################################################
+
+CSV HEADER ONLY:
+benchmark_family,instance_id,seed,N,solver,raw_objective,energy_total,is_feasible,runtime_sec,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
+
+##############################################################################################################
+# FILE: results\portfolio_card\portfolio_card_results_master.csv
+##############################################################################################################
+
+CSV HEADER ONLY:
+benchmark_family,instance_id,seed,N,sa_raw_objective,sa_echo_raw_objective,pair_complete,gap_echo_to_sa,echo_beats_sa,echo_ties_sa,echo_loses_sa,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
+
+##############################################################################################################
+# FILE: results\portfolio_card\portfolio_card_sa_results.csv
+##############################################################################################################
+
+CSV HEADER ONLY:
+benchmark_family,instance_id,seed,N,solver,raw_objective,energy_total,is_feasible,runtime_sec,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
+
+##############################################################################################################
+# FILE: results\robustness_results_master_InsuranceQubo.csv
+##############################################################################################################
+
+CSV HEADER ONLY:
+scenario_id,scenario_name,seed,N,M,K,L,echo_raw_objective,echo_energy,echo_feasible,echo_runtime_sec,echo_chosen_premium_band,echo_chosen_deductible_band,echo_selected_features_count,echo_selected_reg_features_count,echo_tau0,echo_num_stages,echo_best_stage,echo_steps_used,echo_final_condition_number,echo_final_negative_eigs,echo_final_roughness,sa_raw_objective,sa_energy,sa_feasible,sa_runtime_sec,greedy_raw_objective,greedy_energy,greedy_feasible,gurobi_ran,gurobi_raw_objective,gurobi_energy,gurobi_feasible,gurobi_status,gap_echo_to_sa,gap_echo_to_greedy,gap_echo_to_gurobi,echo_beats_sa,echo_ties_sa,echo_loses_sa,echo_beats_greedy,echo_ties_greedy,echo_beats_gurobi,echo_ties_gurobi,echo_loses_gurobi,w_onehot,w_reg,w_aff,sa_temperature_mode,sa_T0_used,sa_Tend_used,sa_auto_temperature
+
+##############################################################################################################
+# FILE: results\spectral_dense\spectral_dense_echo_results.csv
+##############################################################################################################
+
+CSV HEADER ONLY:
+benchmark_family,instance_id,seed,N,solver,raw_objective,energy_total,is_feasible,runtime_sec,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
+
+##############################################################################################################
+# FILE: results\spectral_dense\spectral_dense_results_master.csv
+##############################################################################################################
+
+CSV HEADER ONLY:
+benchmark_family,instance_id,seed,N,sa_raw_objective,sa_echo_raw_objective,pair_complete,gap_echo_to_sa,echo_beats_sa,echo_ties_sa,echo_loses_sa,eigen_min,eigen_max,condition_number,neg_eigs,edge_prob,num_edges,k_frac,K_card,penalty_weight,kappa_target,neg_frac,budget_total_flips,target_flips_used,echo_final_stage_flips,echo_final_stage_frac,echo_tau0,echo_num_stages,echo_best_stage
+
+##############################################################################################################
+# FILE: results\spectral_dense\spectral_dense_sa_results.csv
 ##############################################################################################################
 
 CSV HEADER ONLY:
@@ -2288,10 +2305,15 @@ Sweep modes:
                  at selected (N, seed) subsets (configurable via CLI).
     Extended exactness: targeted Gurobi runs at larger N for selected
                         scenarios, using a 7,200 s time limit (Section 4.2).
+    Robustness: dedicated subset (scenarios 1-4, N=300, seeds 2000-2009)
+                with sa_auto_temperature=true.  Activated via --robustness.
 
 Outputs:
     results/insurance_baseline_results.csv   -- consolidated per-instance results
     results/run_manifest.json                -- full provenance and CLI arguments
+
+    With --robustness:
+    results/insurance_robustness_baseline_results.csv
 """
 
 import argparse
@@ -2822,14 +2844,55 @@ def main():
     ap.add_argument("--exact_mip_gap", type=float, default=0.0,
                     help="Gurobi MIPGap for extended exactness runs.")
 
+    # ------------------------------------------------------------------
+    # Robustness mode: scale-aware SA auto-temperature on a fixed subset
+    # Activates: scenarios 1-4, N=300, seeds 2000-2009, sa_auto_temperature=true
+    # Output: results/insurance_robustness_baseline_results.csv (separate file)
+    # Paper baseline is NOT affected (sa_auto_temperature stays false by default).
+    # ------------------------------------------------------------------
+    ap.add_argument("--robustness", action="store_true",
+                    help=(
+                        "Run robustness subset only: scenarios 1-4, N=300, seeds 2000-2009, "
+                        "sa_auto_temperature=true.  "
+                        "Output: results/insurance_robustness_baseline_results.csv.  "
+                        "Does NOT affect the paper baseline (insurance_baseline_results.csv)."
+                    ))
+
     args = ap.parse_args()
 
     project_root = Path(__file__).resolve().parents[2]
     plan_path = project_root / "config" / "experiment_plan.yaml"
     plan = load_yaml(plan_path)
 
-    feature_sizes = [int(x) for x in plan["feature_sizes"]]
-    scenarios = [int(x) for x in plan["scenarios"]]
+    # ------------------------------------------------------------------
+    # Robustness mode overrides the sweep scope and output path.
+    # Everything else (seed prep, QUBO build, solve_classical, CSV format)
+    # is identical to the normal baseline.
+    # ------------------------------------------------------------------
+    if args.robustness:
+        print("=" * 70)
+        print("ROBUSTNESS MODE: sa_auto_temperature=true")
+        print("  Scope  : scenarios 1-4, N=300, seeds 2000-2009")
+        print("  Output : results/insurance_robustness_baseline_results.csv")
+        print("  NOTE   : paper baseline (insurance_baseline_results.csv) is unchanged")
+        print("=" * 70)
+        robustness_scenarios = [1, 2, 3, 4]
+        robustness_N         = [300]
+        robustness_seeds     = list(range(2000, 2010))
+        robustness_sa_auto   = True
+    else:
+        robustness_scenarios = None
+        robustness_N         = None
+        robustness_seeds     = None
+        robustness_sa_auto   = False
+
+    # Effective sweep scope
+    if args.robustness:
+        feature_sizes = robustness_N
+        scenarios     = robustness_scenarios
+    else:
+        feature_sizes = [int(x) for x in plan["feature_sizes"]]
+        scenarios     = [int(x) for x in plan["scenarios"]]
 
     core_count        = int(plan["seeds"]["core_count"])
     stress_count      = int(plan["seeds"]["stress_count"])
@@ -2845,6 +2908,9 @@ def main():
     sa_num_starts     = int(solver_cfg.get("sa_num_starts", greedy_num_starts))
     sa_multistart     = bool(solver_cfg.get("sa_multistart", True))
 
+    # sa_auto_temperature: robustness mode forces true; otherwise read from plan (default false)
+    sa_auto_temperature = robustness_sa_auto or bool(solver_cfg.get("sa_auto_temperature", False))
+
     # Determine regime master N once, to avoid mid-sweep regeneration.
     # Core regime (N <= 50): generated at N_master_core.
     # Stress regime (N > 50): generated at N_master_stress.
@@ -2853,7 +2919,7 @@ def main():
     N_master_core   = max(core_sizes)   if core_sizes   else 0
     N_master_stress = max(stress_sizes) if stress_sizes else 0
 
-    # Sensitivity configuration
+    # Sensitivity configuration (not used in robustness mode)
     sens_N       = set(parse_int_list(args.sens_N))
     sens_factors = parse_float_list(args.sens_factors)
     sens_params  = [s.strip() for s in (args.sens_params or "").split(",") if s.strip()]
@@ -2880,6 +2946,7 @@ def main():
         "plan": plan,
         "cli_args": {
             "fresh": bool(args.fresh),
+            "robustness": bool(args.robustness),
             "gurobi_max_N": int(args.gurobi_max_N),
             "gurobi_time_limit": int(args.gurobi_time_limit),
             "gurobi_mip_gap": float(args.gurobi_mip_gap),
@@ -2897,9 +2964,10 @@ def main():
             "exact_seed_count": int(args.exact_seed_count),
             "exact_time_limit": int(args.exact_time_limit),
             "exact_mip_gap": float(args.exact_mip_gap),
+            "sa_auto_temperature_effective": bool(sa_auto_temperature),
         },
         "design": {
-            "mode": "hybrid_microdata_to_qubo",
+            "mode": "robustness" if args.robustness else "hybrid_microdata_to_qubo",
             "seed_master_generation": {
                 "N_master_core": int(N_master_core),
                 "N_master_stress": int(N_master_stress),
@@ -2915,8 +2983,18 @@ def main():
     # ------------------------------------------------------------------
     # Output CSV: header is defined as an ordered list so that dict-based
     # row construction is safe against column misalignment.
+    #
+    # SA temperature audit columns are appended at the end so that the
+    # paper baseline CSV (without --robustness) also carries them when
+    # sa_auto_temperature=false (mode="fixed", T0_used=5.0, Tend_used=0.01).
+    # This makes the robustness CSV schema identical to the baseline CSV
+    # schema, enabling direct concatenation for analysis.
     # ------------------------------------------------------------------
-    out_csv = results_dir / "insurance_baseline_results.csv"
+    if args.robustness:
+        out_csv = results_dir / "insurance_robustness_baseline_results.csv"
+    else:
+        out_csv = results_dir / "insurance_baseline_results.csv"
+
     if args.fresh and out_csv.exists():
         out_csv.unlink()
 
@@ -2981,6 +3059,17 @@ def main():
 
         "gurobi_mode",
         "gurobi_time_limit_used",
+
+        # SA temperature audit columns — populated from solution JSON solvers.sa.params.
+        # Present in both normal and robustness CSVs so schemas are identical.
+        #   sa_temperature_mode : "fixed" or "auto"
+        #   sa_T0_used          : actual T0 used by SA (from solution JSON)
+        #   sa_Tend_used        : actual Tend used by SA (from solution JSON)
+        #   sa_auto_temperature : 1 if auto-calibrated, 0 if fixed
+        "sa_temperature_mode",
+        "sa_T0_used",
+        "sa_Tend_used",
+        "sa_auto_temperature",
     ]
 
     if not out_csv.exists():
@@ -2991,7 +3080,7 @@ def main():
     prepared_seeds: set[int] = set()
 
     sens_cases = build_sensitivity_cases(
-        include=bool(args.include_sensitivity),
+        include=bool(args.include_sensitivity) and not args.robustness,
         sens_factors=sens_factors if sens_factors else [0.9, 1.1],
         include_params=sens_params if sens_params else ["A_onehot", "B_reg", "affordability_multiplier", "lambda_risk"],
     )
@@ -3006,11 +3095,15 @@ def main():
         try:
             for N in feature_sizes:
                 # Seed lists by regime
-                seeds_full = (
-                    [core_seed_start   + i for i in range(core_count)]
-                    if N <= 50
-                    else [stress_seed_start + i for i in range(stress_count)]
-                )
+                if args.robustness:
+                    # Robustness: fixed seed list regardless of N
+                    seeds_full = robustness_seeds
+                else:
+                    seeds_full = (
+                        [core_seed_start   + i for i in range(core_count)]
+                        if N <= 50
+                        else [stress_seed_start + i for i in range(stress_count)]
+                    )
 
                 # Subsets for optional sweep modes
                 seeds_sens  = seeds_full[: max(1, int(args.sens_seed_count))] if N in sens_N else []
@@ -3042,7 +3135,7 @@ def main():
                     # --------------------------------------------------
                     cases_here = [sens_cases[0]]  # baseline always included
 
-                    if args.include_sensitivity and (N in sens_N) and (seed in seeds_sens):
+                    if args.include_sensitivity and not args.robustness and (N in sens_N) and (seed in seeds_sens):
                         cases_here.extend(sens_cases[1:])
 
                     for case in cases_here:
@@ -3070,6 +3163,11 @@ def main():
                         cfg["solver"]["sa_multistart"]  = bool(sa_multistart)
                         cfg["solver"]["sa_num_starts"]  = int(sa_num_starts)
                         cfg["solver"]["greedy_num_starts"] = int(greedy_num_starts)
+
+                        # Propagate sa_auto_temperature into the per-instance config
+                        # so that solve_classical.py uses the correct mode end-to-end.
+                        # Robustness mode forces True; normal mode reads from plan (default False).
+                        cfg["solver"]["sa_auto_temperature"] = bool(sa_auto_temperature)
 
                         cfg["penalties"].setdefault("onehot_multiplier", 1.0)
                         cfg["penalties"].setdefault("reg_multiplier", 1.0)
@@ -3200,6 +3298,18 @@ def main():
                         qterm_total_s_signed = safe_float(safe_get(sblk, "qubo_terms_signed.qterm_total_signed"))
 
                         # --------------------------------------------------
+                        # SA temperature audit — read back actual values used
+                        # from the solution JSON written by solve_classical.py.
+                        # Fields: solvers.sa.params.sa_T0, sa_Tend, sa_auto_temperature
+                        # --------------------------------------------------
+                        sa_params_blk = safe_get(sblk, "params") or {}
+                        sa_T0_used    = safe_float(sa_params_blk.get("sa_T0"))
+                        sa_Tend_used  = safe_float(sa_params_blk.get("sa_Tend"))
+                        sa_auto_used  = sa_params_blk.get("sa_auto_temperature", None)
+                        sa_auto_flag  = safe_bool01(sa_auto_used)
+                        sa_temp_mode  = "auto" if sa_auto_flag == 1 else "fixed"
+
+                        # --------------------------------------------------
                         # Step 3: Gurobi exact benchmark (Section 4.2, item 4)
                         #
                         # Extended exactness (7,200 s) takes precedence over the
@@ -3224,6 +3334,7 @@ def main():
 
                         run_gurobi_extended = (
                             args.include_extended_exactness
+                            and not args.robustness
                             and sweep_type == "baseline"
                             and int(scen_id) in exact_scenarios
                             and int(N) in exact_N
@@ -3408,6 +3519,12 @@ def main():
 
                             "gurobi_mode": gurobi_mode,
                             "gurobi_time_limit_used": gurobi_time_limit_used,
+
+                            # SA temperature audit
+                            "sa_temperature_mode": sa_temp_mode,
+                            "sa_T0_used": sa_T0_used,
+                            "sa_Tend_used": sa_Tend_used,
+                            "sa_auto_temperature": sa_auto_flag,
                         }
 
                         row = [row_dict[col] for col in header]
@@ -3419,7 +3536,8 @@ def main():
                         tag      = f" +Gurobi({gurobi_mode})" if gurobi_ran else ""
                         extra    = " +Extract" if do_extract else ""
                         sens_tag = f" +Sens({perturb_param}×{perturb_factor})" if sweep_type == "sensitivity" else ""
-                        print(f"DONE  scenario={scenario_name}  N={N}  seed={seed}{tag}{extra}{sens_tag}")
+                        temp_tag = f" [SA:{sa_temp_mode} T0={sa_T0_used}]" if sa_T0_used is not None else ""
+                        print(f"DONE  scenario={scenario_name}  N={N}  seed={seed}{tag}{extra}{sens_tag}{temp_tag}")
 
         finally:
             # Always restore the original config file to leave the project in
@@ -3589,48 +3707,45 @@ _MASTER_EXTRA = [
 # Automatic temperature scaling
 # ---------------------------------------------------------------------------
 
-def _auto_temperature(Q: np.ndarray, n_samples: int = 200,
+def _auto_temperature(Q: np.ndarray, n_samples: int = 200, 
                        seed: int = 42) -> tuple[float, float]:
     """
-    Derive T0 and Tend by directly measuring the mean absolute single-flip
-    energy change on Q.
-
-    Method: sample n_samples random (v, flip-at-i) pairs, compute |dE| for
-    each, and set T0 = mean|dE|.  This is exact by definition — ratio
-    T0/mean|dE| = 1.0 — and requires no structural assumptions about Q.
-
-    At T0 = mean|dE|:
-      P(accept uphill | dE = mean_dE) = exp(-1) ≈ 37%
-      Expected total acceptance ≈ 68%  (good exploration without random walk)
-
-    Previous formula (mean absolute row sum) overcounted for sparse QUBOs:
-      maxcut N=50:  row-sum T0=22.95 vs actual mean|dE|=3.70  (ratio 6.2x too hot)
-      portfolio N=50: row-sum T0=3051 vs actual mean|dE|=1595  (ratio 1.9x)
-
-    Tend = T0 * 1e-3  (cool to 0.1% of T0 over the full schedule).
-    Clamped to T0 >= 1.0 so Tend never underflows to zero.
+    Calibrate SA temperatures based on the QUBO's typical energy scale.
+    
+    RATIONALE:
+    To ensure Simulated Annealing (SA) is scale-aware across different problem 
+    sizes (N=50 to 300), we measure the 'typical' cost of a single bit-flip. 
+    By setting T0 = mean(|ΔE|), we ensure that an 'average' uphill move is 
+    accepted with probability P = exp(-1) ≈ 37% at the start.
+    
+    METHODOLOGY:
+    1. Sample 'n_samples' random binary states 'v'.
+    2. For each state, perform a random single-bit flip to state 'vn'.
+    3. Calculate the absolute energy difference |E(vn) - E(v)|.
+    4. T0 is the mean of these differences, ensuring the 'Ratio' diagnostic 
+       (T0 / mean|ΔE|) equals 1.0 by definition.
+    5. Tend is set to 0.1% of T0 to allow for final-stage exploitation.
     """
     N   = Q.shape[0]
     rng = np.random.default_rng(seed)
-    des = []
-    for _ in range(n_samples):
+    des: List[float] = []
+
+    for _ in range(int(n_samples)):
         v  = rng.integers(0, 2, size=N).astype(float)
         i  = int(rng.integers(0, N))
         vn = v.copy(); vn[i] = 1.0 - vn[i]
+        # Energy calculation: v^T Q v
         de = abs(float(vn @ Q @ vn) - float(v @ Q @ v))
         des.append(de)
-        # Auto-calibrate temperature to the *actual* single-flip scale of this Q.
-        # NOTE: The previous clamp T0>=1.0 breaks families whose typical |dE| < 1
-        # (e.g., spectral_dense), forcing T0=1 and making SA a near-random walk.
-        T0 = float(np.mean(des))
 
-        # Numerical safety only (do NOT distort scaling):
-        # - Ensure strictly positive so exp(-dE/T) never divides by zero.
-        # - Keep Tend away from 0 to avoid underflow.
-        T0 = max(T0, 1e-9)
-        Tend = max(T0 * 1e-3, 1e-12)
+    # Statistical mean of energy scale
+    T0 = float(np.mean(des)) if des else 1e-9
 
-        return T0, Tend
+    # Numerical safety: prevent division by zero or underflow in exp(-dE/T)
+    T0   = max(T0, 1e-9)
+    Tend = max(T0 * 1e-3, 1e-12)
+
+    return T0, Tend
 
 
 
@@ -5024,6 +5139,18 @@ Usage:
 
     # Test mode: run only the first N instances
     python run_echo_full.py --test 5
+
+    # Robustness experiment: scale-aware SA auto-temperature subset
+    python run_echo_full.py \\
+        --baseline results/insurance_robustness_baseline_results.csv \\
+        --output   results/robustness_results_master_InsuranceQubo.csv \\
+        --robustness_seeds
+
+    # Equivalent explicit form (same as --robustness_seeds):
+    python run_echo_full.py \\
+        --baseline results/insurance_robustness_baseline_results.csv \\
+        --output   results/robustness_results_master_InsuranceQubo.csv \\
+        --scenario_filter 1,2,3,4 --N_filter 300 --seed_filter 2000-2009
 """
 
 import argparse
@@ -5102,6 +5229,32 @@ SCENARIO_NAMES = {
     3: 'S3_tight_regulation',
     4: 'S4_affordability',
 }
+
+
+# ---------------------------------------------------------------------------
+# CLI filter parsing helpers
+# ---------------------------------------------------------------------------
+
+def _parse_int_csv(s: str) -> list[int]:
+    """Parse '1,2,3,4' -> [1, 2, 3, 4]."""
+    return [int(x.strip()) for x in s.split(",") if x.strip()]
+
+
+def _parse_seed_range(s: str) -> list[int]:
+    """
+    Parse a seed specification into a list of ints.
+    Accepts either:
+        '2000-2009'   -> list(range(2000, 2010))
+        '2000,2001'   -> [2000, 2001]
+        '2005'        -> [2005]
+    """
+    s = s.strip()
+    if "-" in s and "," not in s:
+        parts = s.split("-")
+        if len(parts) == 2:
+            lo, hi = int(parts[0]), int(parts[1])
+            return list(range(lo, hi + 1))
+    return _parse_int_csv(s)
 
 
 # ---------------------------------------------------------------------------
@@ -5323,6 +5476,10 @@ def run_echo_on_instance(seed, scenario_id, N, data_dir, baseline_row, verbose=F
     The paired gap Δ = echo_raw_objective − sa_raw_objective follows the
     sign convention in Section 4.3: negative values indicate ECHO improvement.
     Win/tie/loss classification uses tolerance ε = 10⁻⁶ (Section 4.3).
+
+    SA temperature audit columns (sa_temperature_mode, sa_T0_used, sa_Tend_used,
+    sa_auto_temperature) are carried through from the baseline_row when present,
+    so that the ECHO master output is fully auditable.
     """
     data = load_qubo_and_decompose(seed, scenario_id, N, data_dir)
 
@@ -5358,6 +5515,14 @@ def run_echo_on_instance(seed, scenario_id, N, data_dir, baseline_row, verbose=F
         gurobi_energy   = np.nan
         gurobi_feasible = False
         gurobi_status   = 'not_run'
+
+    # SA temperature audit — carry through from baseline CSV if present.
+    # Columns added by the patched run_baseline_full.py; gracefully absent
+    # in older baseline files (defaults to None/empty so output is valid).
+    sa_temperature_mode = baseline_row.get('sa_temperature_mode', None)
+    sa_T0_used          = baseline_row.get('sa_T0_used', None)
+    sa_Tend_used        = baseline_row.get('sa_Tend_used', None)
+    sa_auto_temperature = baseline_row.get('sa_auto_temperature', None)
 
     # Paired gaps (Section 4.3): negative = ECHO improvement
     gap_sa     = echo_eval['raw_objective'] - sa_raw
@@ -5449,6 +5614,14 @@ def run_echo_on_instance(seed, scenario_id, N, data_dir, baseline_row, verbose=F
         'w_onehot': data['w_oh'],
         'w_reg': data['w_reg'],
         'w_aff': data['w_aff'],
+
+        # SA temperature audit — carried from baseline CSV.
+        # Present only when baseline was produced by the patched runner;
+        # None/NaN when using an older baseline file without these columns.
+        'sa_temperature_mode': sa_temperature_mode,
+        'sa_T0_used': sa_T0_used,
+        'sa_Tend_used': sa_Tend_used,
+        'sa_auto_temperature': sa_auto_temperature,
     }
 
 
@@ -5467,15 +5640,73 @@ def main():
     parser.add_argument('--test', type=int, default=None,
                         help="Test mode: run only the first N instances.")
     parser.add_argument('--baseline', type=str, default='results/insurance_baseline_results.csv',
-                        help="Path to insurance_baseline_results.csv.")
+                        help="Path to baseline CSV (default: results/insurance_baseline_results.csv).")
     parser.add_argument('--output', type=str, default='results/insurance_echo_results_master.csv',
-                        help="Path for output CSV.")
+                        help="Path for output CSV (default: results/insurance_echo_results_master.csv).")
     parser.add_argument('--append', action='store_true',
                         help="Append to an existing output file rather than overwriting.")
     parser.add_argument('--verbose', action='store_true',
                         help="Print ECHO solver progress for each instance.")
 
+    # ------------------------------------------------------------------
+    # Fine-grained subset filters — allow running any subset of the
+    # instance corpus without modifying ALL_CONFIGS.
+    # Designed for the robustness experiment (N=300, seeds 2000-2009).
+    # ------------------------------------------------------------------
+    parser.add_argument('--scenario_filter', type=str, default=None,
+                        help=(
+                            "Comma-separated scenario IDs to include, e.g. '1,2,3,4'. "
+                            "Applied on top of --scenario (further restricts if both given)."
+                        ))
+    parser.add_argument('--N_filter', type=str, default=None,
+                        help=(
+                            "Comma-separated N values to include, e.g. '300'. "
+                            "Applied on top of --N (further restricts if both given)."
+                        ))
+    parser.add_argument('--seed_filter', type=str, default=None,
+                        help=(
+                            "Seeds to include: '2000-2009' (range) or '2000,2001,...' (CSV). "
+                            "Only seeds that appear in both ALL_CONFIGS and this filter are run."
+                        ))
+
+    # ------------------------------------------------------------------
+    # Robustness convenience flag
+    # Equivalent to:
+    #   --baseline results/insurance_robustness_baseline_results.csv
+    #   --output   results/robustness_results_master_InsuranceQubo.csv
+    #   --scenario_filter 1,2,3,4  --N_filter 300  --seed_filter 2000-2009
+    # ------------------------------------------------------------------
+    parser.add_argument('--robustness_seeds', action='store_true',
+                        help=(
+                            "Convenience flag: restrict to robustness subset "
+                            "(scenarios 1-4, N=300, seeds 2000-2009). "
+                            "Automatically sets --scenario_filter, --N_filter, and --seed_filter. "
+                            "Does NOT change --baseline or --output; pass those explicitly."
+                        ))
+
     args = parser.parse_args()
+
+    # Apply robustness_seeds convenience flag
+    if args.robustness_seeds:
+        if args.scenario_filter is None:
+            args.scenario_filter = "1,2,3,4"
+        if args.N_filter is None:
+            args.N_filter = "300"
+        if args.seed_filter is None:
+            args.seed_filter = "2000-2009"
+
+    # Parse fine-grained filters
+    allowed_scenarios: set[int] | None = None
+    if args.scenario_filter is not None:
+        allowed_scenarios = set(_parse_int_csv(args.scenario_filter))
+
+    allowed_N: set[int] | None = None
+    if args.N_filter is not None:
+        allowed_N = set(_parse_int_csv(args.N_filter))
+
+    allowed_seeds: set[int] | None = None
+    if args.seed_filter is not None:
+        allowed_seeds = set(_parse_seed_range(args.seed_filter))
 
     project_root = Path.cwd()
     data_dir     = project_root / "data" / "seeds"
@@ -5493,15 +5724,23 @@ def main():
     print(f"Loaded baseline: {baseline_file} ({len(baseline_df)} baseline instances)")
 
     # ------------------------------------------------------------------
-    # Build instance list, applying any CLI filters
+    # Build instance list, applying all CLI filters
     # ------------------------------------------------------------------
     instances_to_run = []
     for (scen_id, N), seeds in ALL_CONFIGS.items():
+        # Standard single-value filters (--scenario, --N)
         if args.scenario is not None and scen_id != args.scenario:
             continue
         if args.N is not None and N != args.N:
             continue
+        # Fine-grained set filters
+        if allowed_scenarios is not None and scen_id not in allowed_scenarios:
+            continue
+        if allowed_N is not None and N not in allowed_N:
+            continue
         for seed in seeds:
+            if allowed_seeds is not None and seed not in allowed_seeds:
+                continue
             instances_to_run.append((scen_id, N, seed))
 
     if args.test:
@@ -5511,6 +5750,8 @@ def main():
     print(f"Output: {args.output}")
     if args.append:
         print("Mode: APPEND to existing file")
+    if args.robustness_seeds:
+        print("Filter: robustness subset (scenarios 1-4, N=300, seeds 2000-2009)")
     print()
 
     # ------------------------------------------------------------------
@@ -5621,6 +5862,13 @@ def main():
                 t    = df_n['echo_ties_sa'].sum()
                 gap  = df_n['gap_echo_to_sa'].median()
                 print(f"{N_val:<6} {len(df_n):<8} {w:<8} {t:<8} {w / len(df_n) * 100:<8.1f} {gap:<12,.1f}")
+
+        # Print SA temperature mode breakdown if audit columns are present
+        if 'sa_temperature_mode' in df_new.columns and df_new['sa_temperature_mode'].notna().any():
+            mode_counts = df_new['sa_temperature_mode'].value_counts()
+            print(f"\nSA temperature mode in baseline:")
+            for mode, cnt in mode_counts.items():
+                print(f"  {mode}: {cnt}")
 
         print("\n" + "=" * 80)
         total_rows = (len(existing_df) + len(df_new)) if existing_df is not None else len(df_new)
@@ -6493,6 +6741,28 @@ def energy(Q: np.ndarray, v: np.ndarray) -> float:
     """Evaluate QUBO energy: E(v) = v^T Q v."""
     return float(v @ Q @ v)
 
+def auto_temperature(Q: np.ndarray, n_samples: int = 200, seed: int = 42) -> Tuple[float, float]:
+    """
+    Auto-calibrate SA temperatures for the Primary Insurance QUBO.
+    
+    NOTE: This is OFF by default to preserve the fixed T0=5.0 baseline 
+    stated in Section 4.2 of the paper. When enabled via YAML, it 
+    aligns the insurance solver's energy scale with the benchmark suite.
+    """
+    n = int(Q.shape[0])
+    rng = np.random.default_rng(seed)
+    des = []
+    for _ in range(int(n_samples)):
+        v = rng.integers(0, 2, size=n).astype(float)
+        i = int(rng.integers(0, n))
+        vn = v.copy(); vn[i] = 1.0 - vn[i]
+        de = abs(float(vn @ Q @ vn) - float(v @ Q @ v))
+        des.append(de)
+    
+    T0 = float(np.mean(des)) if des else 1e-9
+    T0 = max(T0, 1e-9)
+    Tend = max(T0 * 1e-3, 1e-12)
+    return float(T0), float(Tend)
 
 def project_onehot(v: np.ndarray, N: int, M: int, K: int,
                    rng: np.random.Generator) -> np.ndarray:
@@ -7156,9 +7426,21 @@ def main():
             num_starts_greedy = 100
 
     # SA parameters (Section 4.2, item 2)
-    steps  = int(solver_cfg.get("sa_steps", 40000))
-    T0     = float(solver_cfg.get("sa_T0",   5.0))
-    Tend   = float(solver_cfg.get("sa_Tend", 0.01))
+    # --- UPDATED SA PARAMETERS (Addressing Reviewer Feedback) ---
+    steps = int(solver_cfg.get("sa_steps", 40000))
+
+    # Default: fixed temperatures (5.0 -> 0.01) as stated in the paper baseline.
+    # Optional: enable scale-aware auto-temperature for robustness tests.
+    sa_auto_temp = bool(solver_cfg.get("sa_auto_temperature", False))
+
+    if sa_auto_temp:
+        # Use the auto_temperature helper to measure the energy scale |dE|.
+        # Seed is tied to the instance for full reproducibility.
+        T0, Tend = auto_temperature(Q, n_samples=200, seed=int(SEED) * 104729 + 4242)
+    else:
+        # Paper Baseline
+        T0   = float(solver_cfg.get("sa_T0",   5.0))
+        Tend = float(solver_cfg.get("sa_Tend", 0.01))
 
     sa_multistart  = bool(solver_cfg.get("sa_multistart", True))
     sa_num_starts_cfg = solver_cfg.get("sa_num_starts", None)
@@ -7262,9 +7544,9 @@ def main():
             },
             "sa": sa_pack | {
                 "params": {
-                    "sa_steps": int(steps),
                     "sa_T0":    float(T0),
                     "sa_Tend":  float(Tend),
+                    "sa_auto_temperature": bool(sa_auto_temp), # Added for auditability
                     "sa_move_probs": {
                         "premium":    float(prem_prob),
                         "deductible": float(ded_prob),

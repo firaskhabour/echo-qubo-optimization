@@ -539,7 +539,62 @@ To reproduce the study:
    4. Wait for experiments to complete
    5. Analyse the CSV outputs
 
+====================================================================
+21. ROBUSTNESS TEST — AUTO TEMPERATURE MODE
+====================================================================
 
+The baseline insurance experiments use a fixed simulated annealing
+temperature schedule:
+
+      T0   = 5
+      Tend = 0.01
+
+To verify that the SA vs ECHO comparison is not dependent on this
+fixed schedule, a robustness experiment can be executed using
+automatic temperature calibration.
+
+Recommended robustness setup:
+
+      N = 300
+      Scenarios = S1, S2, S3, S4
+      Seeds = 2000 – 2009
+
+PowerShell run command:
+
+   $env:SA_AUTO_TEMPERATURE="True"
+   python Start_ECHO_Experiment.py
+
+   For limited run to Robustness as per paper: 
+   python src_code/runners/run_baseline_full.py
+    --robustness; python src_code/runners/run_echo_full.py 
+    --baseline results/insurance_robustness_baseline_results.csv 
+    --output results/robustness_results_master_InsuranceQubo.csv 
+    --robustness_seeds
+
+Then run the insurance robustness subset for:
+
+   • N = 300
+   • S1, S2, S3, S4
+   • seeds 2000–2009
+
+If running directly through runner scripts, use:
+
+   $env:SA_AUTO_TEMPERATURE="True"
+   python src_code\runners\run_baseline_full.py
+   python src_code\runners\run_echo_full.py
+
+Solvers executed:
+
+   • Simulated Annealing (SA)
+   • ECHO-SA
+
+Expected output:
+
+   robustness_results_master.csv
+
+This experiment confirms that the relative performance conclusions
+reported in the manuscript remain consistent when the annealing
+temperature is scaled automatically with the QUBO energy magnitude.
 
 ====================================================================
 CONTACT

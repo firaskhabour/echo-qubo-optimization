@@ -29,6 +29,18 @@ Usage:
 
     # Test mode: run only the first N instances
     python run_echo_full.py --test 5
+
+    # Robustness experiment: scale-aware SA auto-temperature subset
+    python run_echo_full.py \\
+        --baseline results/insurance_robustness_baseline_results.csv \\
+        --output   results/robustness_results_master_InsuranceQubo.csv \\
+        --robustness_seeds
+
+    # Equivalent explicit form (same as --robustness_seeds):
+    python run_echo_full.py \\
+        --baseline results/insurance_robustness_baseline_results.csv \\
+        --output   results/robustness_results_master_InsuranceQubo.csv \\
+        --scenario_filter 1,2,3,4 --N_filter 300 --seed_filter 2000-2009
 """
 
 import argparse
@@ -107,6 +119,32 @@ SCENARIO_NAMES = {
     3: 'S3_tight_regulation',
     4: 'S4_affordability',
 }
+
+
+# ---------------------------------------------------------------------------
+# CLI filter parsing helpers
+# ---------------------------------------------------------------------------
+
+def _parse_int_csv(s: str) -> list[int]:
+    """Parse '1,2,3,4' -> [1, 2, 3, 4]."""
+    return [int(x.strip()) for x in s.split(",") if x.strip()]
+
+
+def _parse_seed_range(s: str) -> list[int]:
+    """
+    Parse a seed specification into a list of ints.
+    Accepts either:
+        '2000-2009'   -> list(range(2000, 2010))
+        '2000,2001'   -> [2000, 2001]
+        '2005'        -> [2005]
+    """
+    s = s.strip()
+    if "-" in s and "," not in s:
+        parts = s.split("-")
+        if len(parts) == 2:
+            lo, hi = int(parts[0]), int(parts[1])
+            return list(range(lo, hi + 1))
+    return _parse_int_csv(s)
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +366,10 @@ def run_echo_on_instance(seed, scenario_id, N, data_dir, baseline_row, verbose=F
     The paired gap Δ = echo_raw_objective − sa_raw_objective follows the
     sign convention in Section 4.3: negative values indicate ECHO improvement.
     Win/tie/loss classification uses tolerance ε = 10⁻⁶ (Section 4.3).
+
+    SA temperature audit columns (sa_temperature_mode, sa_T0_used, sa_Tend_used,
+    sa_auto_temperature) are carried through from the baseline_row when present,
+    so that the ECHO master output is fully auditable.
     """
     data = load_qubo_and_decompose(seed, scenario_id, N, data_dir)
 
@@ -363,6 +405,14 @@ def run_echo_on_instance(seed, scenario_id, N, data_dir, baseline_row, verbose=F
         gurobi_energy   = np.nan
         gurobi_feasible = False
         gurobi_status   = 'not_run'
+
+    # SA temperature audit — carry through from baseline CSV if present.
+    # Columns added by the patched run_baseline_full.py; gracefully absent
+    # in older baseline files (defaults to None/empty so output is valid).
+    sa_temperature_mode = baseline_row.get('sa_temperature_mode', None)
+    sa_T0_used          = baseline_row.get('sa_T0_used', None)
+    sa_Tend_used        = baseline_row.get('sa_Tend_used', None)
+    sa_auto_temperature = baseline_row.get('sa_auto_temperature', None)
 
     # Paired gaps (Section 4.3): negative = ECHO improvement
     gap_sa     = echo_eval['raw_objective'] - sa_raw
@@ -454,6 +504,14 @@ def run_echo_on_instance(seed, scenario_id, N, data_dir, baseline_row, verbose=F
         'w_onehot': data['w_oh'],
         'w_reg': data['w_reg'],
         'w_aff': data['w_aff'],
+
+        # SA temperature audit — carried from baseline CSV.
+        # Present only when baseline was produced by the patched runner;
+        # None/NaN when using an older baseline file without these columns.
+        'sa_temperature_mode': sa_temperature_mode,
+        'sa_T0_used': sa_T0_used,
+        'sa_Tend_used': sa_Tend_used,
+        'sa_auto_temperature': sa_auto_temperature,
     }
 
 
@@ -472,15 +530,73 @@ def main():
     parser.add_argument('--test', type=int, default=None,
                         help="Test mode: run only the first N instances.")
     parser.add_argument('--baseline', type=str, default='results/insurance_baseline_results.csv',
-                        help="Path to insurance_baseline_results.csv.")
+                        help="Path to baseline CSV (default: results/insurance_baseline_results.csv).")
     parser.add_argument('--output', type=str, default='results/insurance_echo_results_master.csv',
-                        help="Path for output CSV.")
+                        help="Path for output CSV (default: results/insurance_echo_results_master.csv).")
     parser.add_argument('--append', action='store_true',
                         help="Append to an existing output file rather than overwriting.")
     parser.add_argument('--verbose', action='store_true',
                         help="Print ECHO solver progress for each instance.")
 
+    # ------------------------------------------------------------------
+    # Fine-grained subset filters — allow running any subset of the
+    # instance corpus without modifying ALL_CONFIGS.
+    # Designed for the robustness experiment (N=300, seeds 2000-2009).
+    # ------------------------------------------------------------------
+    parser.add_argument('--scenario_filter', type=str, default=None,
+                        help=(
+                            "Comma-separated scenario IDs to include, e.g. '1,2,3,4'. "
+                            "Applied on top of --scenario (further restricts if both given)."
+                        ))
+    parser.add_argument('--N_filter', type=str, default=None,
+                        help=(
+                            "Comma-separated N values to include, e.g. '300'. "
+                            "Applied on top of --N (further restricts if both given)."
+                        ))
+    parser.add_argument('--seed_filter', type=str, default=None,
+                        help=(
+                            "Seeds to include: '2000-2009' (range) or '2000,2001,...' (CSV). "
+                            "Only seeds that appear in both ALL_CONFIGS and this filter are run."
+                        ))
+
+    # ------------------------------------------------------------------
+    # Robustness convenience flag
+    # Equivalent to:
+    #   --baseline results/insurance_robustness_baseline_results.csv
+    #   --output   results/robustness_results_master_InsuranceQubo.csv
+    #   --scenario_filter 1,2,3,4  --N_filter 300  --seed_filter 2000-2009
+    # ------------------------------------------------------------------
+    parser.add_argument('--robustness_seeds', action='store_true',
+                        help=(
+                            "Convenience flag: restrict to robustness subset "
+                            "(scenarios 1-4, N=300, seeds 2000-2009). "
+                            "Automatically sets --scenario_filter, --N_filter, and --seed_filter. "
+                            "Does NOT change --baseline or --output; pass those explicitly."
+                        ))
+
     args = parser.parse_args()
+
+    # Apply robustness_seeds convenience flag
+    if args.robustness_seeds:
+        if args.scenario_filter is None:
+            args.scenario_filter = "1,2,3,4"
+        if args.N_filter is None:
+            args.N_filter = "300"
+        if args.seed_filter is None:
+            args.seed_filter = "2000-2009"
+
+    # Parse fine-grained filters
+    allowed_scenarios: set[int] | None = None
+    if args.scenario_filter is not None:
+        allowed_scenarios = set(_parse_int_csv(args.scenario_filter))
+
+    allowed_N: set[int] | None = None
+    if args.N_filter is not None:
+        allowed_N = set(_parse_int_csv(args.N_filter))
+
+    allowed_seeds: set[int] | None = None
+    if args.seed_filter is not None:
+        allowed_seeds = set(_parse_seed_range(args.seed_filter))
 
     project_root = Path.cwd()
     data_dir     = project_root / "data" / "seeds"
@@ -498,15 +614,23 @@ def main():
     print(f"Loaded baseline: {baseline_file} ({len(baseline_df)} baseline instances)")
 
     # ------------------------------------------------------------------
-    # Build instance list, applying any CLI filters
+    # Build instance list, applying all CLI filters
     # ------------------------------------------------------------------
     instances_to_run = []
     for (scen_id, N), seeds in ALL_CONFIGS.items():
+        # Standard single-value filters (--scenario, --N)
         if args.scenario is not None and scen_id != args.scenario:
             continue
         if args.N is not None and N != args.N:
             continue
+        # Fine-grained set filters
+        if allowed_scenarios is not None and scen_id not in allowed_scenarios:
+            continue
+        if allowed_N is not None and N not in allowed_N:
+            continue
         for seed in seeds:
+            if allowed_seeds is not None and seed not in allowed_seeds:
+                continue
             instances_to_run.append((scen_id, N, seed))
 
     if args.test:
@@ -516,6 +640,8 @@ def main():
     print(f"Output: {args.output}")
     if args.append:
         print("Mode: APPEND to existing file")
+    if args.robustness_seeds:
+        print("Filter: robustness subset (scenarios 1-4, N=300, seeds 2000-2009)")
     print()
 
     # ------------------------------------------------------------------
@@ -626,6 +752,13 @@ def main():
                 t    = df_n['echo_ties_sa'].sum()
                 gap  = df_n['gap_echo_to_sa'].median()
                 print(f"{N_val:<6} {len(df_n):<8} {w:<8} {t:<8} {w / len(df_n) * 100:<8.1f} {gap:<12,.1f}")
+
+        # Print SA temperature mode breakdown if audit columns are present
+        if 'sa_temperature_mode' in df_new.columns and df_new['sa_temperature_mode'].notna().any():
+            mode_counts = df_new['sa_temperature_mode'].value_counts()
+            print(f"\nSA temperature mode in baseline:")
+            for mode, cnt in mode_counts.items():
+                print(f"  {mode}: {cnt}")
 
         print("\n" + "=" * 80)
         total_rows = (len(existing_df) + len(df_new)) if existing_df is not None else len(df_new)

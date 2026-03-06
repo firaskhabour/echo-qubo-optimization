@@ -23,10 +23,15 @@ Sweep modes:
                  at selected (N, seed) subsets (configurable via CLI).
     Extended exactness: targeted Gurobi runs at larger N for selected
                         scenarios, using a 7,200 s time limit (Section 4.2).
+    Robustness: dedicated subset (scenarios 1-4, N=300, seeds 2000-2009)
+                with sa_auto_temperature=true.  Activated via --robustness.
 
 Outputs:
     results/insurance_baseline_results.csv   -- consolidated per-instance results
     results/run_manifest.json                -- full provenance and CLI arguments
+
+    With --robustness:
+    results/insurance_robustness_baseline_results.csv
 """
 
 import argparse
@@ -557,14 +562,55 @@ def main():
     ap.add_argument("--exact_mip_gap", type=float, default=0.0,
                     help="Gurobi MIPGap for extended exactness runs.")
 
+    # ------------------------------------------------------------------
+    # Robustness mode: scale-aware SA auto-temperature on a fixed subset
+    # Activates: scenarios 1-4, N=300, seeds 2000-2009, sa_auto_temperature=true
+    # Output: results/insurance_robustness_baseline_results.csv (separate file)
+    # Paper baseline is NOT affected (sa_auto_temperature stays false by default).
+    # ------------------------------------------------------------------
+    ap.add_argument("--robustness", action="store_true",
+                    help=(
+                        "Run robustness subset only: scenarios 1-4, N=300, seeds 2000-2009, "
+                        "sa_auto_temperature=true.  "
+                        "Output: results/insurance_robustness_baseline_results.csv.  "
+                        "Does NOT affect the paper baseline (insurance_baseline_results.csv)."
+                    ))
+
     args = ap.parse_args()
 
     project_root = Path(__file__).resolve().parents[2]
     plan_path = project_root / "config" / "experiment_plan.yaml"
     plan = load_yaml(plan_path)
 
-    feature_sizes = [int(x) for x in plan["feature_sizes"]]
-    scenarios = [int(x) for x in plan["scenarios"]]
+    # ------------------------------------------------------------------
+    # Robustness mode overrides the sweep scope and output path.
+    # Everything else (seed prep, QUBO build, solve_classical, CSV format)
+    # is identical to the normal baseline.
+    # ------------------------------------------------------------------
+    if args.robustness:
+        print("=" * 70)
+        print("ROBUSTNESS MODE: sa_auto_temperature=true")
+        print("  Scope  : scenarios 1-4, N=300, seeds 2000-2009")
+        print("  Output : results/insurance_robustness_baseline_results.csv")
+        print("  NOTE   : paper baseline (insurance_baseline_results.csv) is unchanged")
+        print("=" * 70)
+        robustness_scenarios = [1, 2, 3, 4]
+        robustness_N         = [300]
+        robustness_seeds     = list(range(2000, 2010))
+        robustness_sa_auto   = True
+    else:
+        robustness_scenarios = None
+        robustness_N         = None
+        robustness_seeds     = None
+        robustness_sa_auto   = False
+
+    # Effective sweep scope
+    if args.robustness:
+        feature_sizes = robustness_N
+        scenarios     = robustness_scenarios
+    else:
+        feature_sizes = [int(x) for x in plan["feature_sizes"]]
+        scenarios     = [int(x) for x in plan["scenarios"]]
 
     core_count        = int(plan["seeds"]["core_count"])
     stress_count      = int(plan["seeds"]["stress_count"])
@@ -580,6 +626,9 @@ def main():
     sa_num_starts     = int(solver_cfg.get("sa_num_starts", greedy_num_starts))
     sa_multistart     = bool(solver_cfg.get("sa_multistart", True))
 
+    # sa_auto_temperature: robustness mode forces true; otherwise read from plan (default false)
+    sa_auto_temperature = robustness_sa_auto or bool(solver_cfg.get("sa_auto_temperature", False))
+
     # Determine regime master N once, to avoid mid-sweep regeneration.
     # Core regime (N <= 50): generated at N_master_core.
     # Stress regime (N > 50): generated at N_master_stress.
@@ -588,7 +637,7 @@ def main():
     N_master_core   = max(core_sizes)   if core_sizes   else 0
     N_master_stress = max(stress_sizes) if stress_sizes else 0
 
-    # Sensitivity configuration
+    # Sensitivity configuration (not used in robustness mode)
     sens_N       = set(parse_int_list(args.sens_N))
     sens_factors = parse_float_list(args.sens_factors)
     sens_params  = [s.strip() for s in (args.sens_params or "").split(",") if s.strip()]
@@ -615,6 +664,7 @@ def main():
         "plan": plan,
         "cli_args": {
             "fresh": bool(args.fresh),
+            "robustness": bool(args.robustness),
             "gurobi_max_N": int(args.gurobi_max_N),
             "gurobi_time_limit": int(args.gurobi_time_limit),
             "gurobi_mip_gap": float(args.gurobi_mip_gap),
@@ -632,9 +682,10 @@ def main():
             "exact_seed_count": int(args.exact_seed_count),
             "exact_time_limit": int(args.exact_time_limit),
             "exact_mip_gap": float(args.exact_mip_gap),
+            "sa_auto_temperature_effective": bool(sa_auto_temperature),
         },
         "design": {
-            "mode": "hybrid_microdata_to_qubo",
+            "mode": "robustness" if args.robustness else "hybrid_microdata_to_qubo",
             "seed_master_generation": {
                 "N_master_core": int(N_master_core),
                 "N_master_stress": int(N_master_stress),
@@ -650,8 +701,18 @@ def main():
     # ------------------------------------------------------------------
     # Output CSV: header is defined as an ordered list so that dict-based
     # row construction is safe against column misalignment.
+    #
+    # SA temperature audit columns are appended at the end so that the
+    # paper baseline CSV (without --robustness) also carries them when
+    # sa_auto_temperature=false (mode="fixed", T0_used=5.0, Tend_used=0.01).
+    # This makes the robustness CSV schema identical to the baseline CSV
+    # schema, enabling direct concatenation for analysis.
     # ------------------------------------------------------------------
-    out_csv = results_dir / "insurance_baseline_results.csv"
+    if args.robustness:
+        out_csv = results_dir / "insurance_robustness_baseline_results.csv"
+    else:
+        out_csv = results_dir / "insurance_baseline_results.csv"
+
     if args.fresh and out_csv.exists():
         out_csv.unlink()
 
@@ -716,6 +777,17 @@ def main():
 
         "gurobi_mode",
         "gurobi_time_limit_used",
+
+        # SA temperature audit columns — populated from solution JSON solvers.sa.params.
+        # Present in both normal and robustness CSVs so schemas are identical.
+        #   sa_temperature_mode : "fixed" or "auto"
+        #   sa_T0_used          : actual T0 used by SA (from solution JSON)
+        #   sa_Tend_used        : actual Tend used by SA (from solution JSON)
+        #   sa_auto_temperature : 1 if auto-calibrated, 0 if fixed
+        "sa_temperature_mode",
+        "sa_T0_used",
+        "sa_Tend_used",
+        "sa_auto_temperature",
     ]
 
     if not out_csv.exists():
@@ -726,7 +798,7 @@ def main():
     prepared_seeds: set[int] = set()
 
     sens_cases = build_sensitivity_cases(
-        include=bool(args.include_sensitivity),
+        include=bool(args.include_sensitivity) and not args.robustness,
         sens_factors=sens_factors if sens_factors else [0.9, 1.1],
         include_params=sens_params if sens_params else ["A_onehot", "B_reg", "affordability_multiplier", "lambda_risk"],
     )
@@ -741,11 +813,15 @@ def main():
         try:
             for N in feature_sizes:
                 # Seed lists by regime
-                seeds_full = (
-                    [core_seed_start   + i for i in range(core_count)]
-                    if N <= 50
-                    else [stress_seed_start + i for i in range(stress_count)]
-                )
+                if args.robustness:
+                    # Robustness: fixed seed list regardless of N
+                    seeds_full = robustness_seeds
+                else:
+                    seeds_full = (
+                        [core_seed_start   + i for i in range(core_count)]
+                        if N <= 50
+                        else [stress_seed_start + i for i in range(stress_count)]
+                    )
 
                 # Subsets for optional sweep modes
                 seeds_sens  = seeds_full[: max(1, int(args.sens_seed_count))] if N in sens_N else []
@@ -777,7 +853,7 @@ def main():
                     # --------------------------------------------------
                     cases_here = [sens_cases[0]]  # baseline always included
 
-                    if args.include_sensitivity and (N in sens_N) and (seed in seeds_sens):
+                    if args.include_sensitivity and not args.robustness and (N in sens_N) and (seed in seeds_sens):
                         cases_here.extend(sens_cases[1:])
 
                     for case in cases_here:
@@ -805,6 +881,11 @@ def main():
                         cfg["solver"]["sa_multistart"]  = bool(sa_multistart)
                         cfg["solver"]["sa_num_starts"]  = int(sa_num_starts)
                         cfg["solver"]["greedy_num_starts"] = int(greedy_num_starts)
+
+                        # Propagate sa_auto_temperature into the per-instance config
+                        # so that solve_classical.py uses the correct mode end-to-end.
+                        # Robustness mode forces True; normal mode reads from plan (default False).
+                        cfg["solver"]["sa_auto_temperature"] = bool(sa_auto_temperature)
 
                         cfg["penalties"].setdefault("onehot_multiplier", 1.0)
                         cfg["penalties"].setdefault("reg_multiplier", 1.0)
@@ -935,6 +1016,18 @@ def main():
                         qterm_total_s_signed = safe_float(safe_get(sblk, "qubo_terms_signed.qterm_total_signed"))
 
                         # --------------------------------------------------
+                        # SA temperature audit — read back actual values used
+                        # from the solution JSON written by solve_classical.py.
+                        # Fields: solvers.sa.params.sa_T0, sa_Tend, sa_auto_temperature
+                        # --------------------------------------------------
+                        sa_params_blk = safe_get(sblk, "params") or {}
+                        sa_T0_used    = safe_float(sa_params_blk.get("sa_T0"))
+                        sa_Tend_used  = safe_float(sa_params_blk.get("sa_Tend"))
+                        sa_auto_used  = sa_params_blk.get("sa_auto_temperature", None)
+                        sa_auto_flag  = safe_bool01(sa_auto_used)
+                        sa_temp_mode  = "auto" if sa_auto_flag == 1 else "fixed"
+
+                        # --------------------------------------------------
                         # Step 3: Gurobi exact benchmark (Section 4.2, item 4)
                         #
                         # Extended exactness (7,200 s) takes precedence over the
@@ -959,6 +1052,7 @@ def main():
 
                         run_gurobi_extended = (
                             args.include_extended_exactness
+                            and not args.robustness
                             and sweep_type == "baseline"
                             and int(scen_id) in exact_scenarios
                             and int(N) in exact_N
@@ -1143,6 +1237,12 @@ def main():
 
                             "gurobi_mode": gurobi_mode,
                             "gurobi_time_limit_used": gurobi_time_limit_used,
+
+                            # SA temperature audit
+                            "sa_temperature_mode": sa_temp_mode,
+                            "sa_T0_used": sa_T0_used,
+                            "sa_Tend_used": sa_Tend_used,
+                            "sa_auto_temperature": sa_auto_flag,
                         }
 
                         row = [row_dict[col] for col in header]
@@ -1154,7 +1254,8 @@ def main():
                         tag      = f" +Gurobi({gurobi_mode})" if gurobi_ran else ""
                         extra    = " +Extract" if do_extract else ""
                         sens_tag = f" +Sens({perturb_param}×{perturb_factor})" if sweep_type == "sensitivity" else ""
-                        print(f"DONE  scenario={scenario_name}  N={N}  seed={seed}{tag}{extra}{sens_tag}")
+                        temp_tag = f" [SA:{sa_temp_mode} T0={sa_T0_used}]" if sa_T0_used is not None else ""
+                        print(f"DONE  scenario={scenario_name}  N={N}  seed={seed}{tag}{extra}{sens_tag}{temp_tag}")
 
         finally:
             # Always restore the original config file to leave the project in
