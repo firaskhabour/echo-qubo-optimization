@@ -1,0 +1,246 @@
+{
+  "scenario": "S2_risk_adjusted",
+  "scenario_file": "config_qubo_S2.yaml",
+  "seed": 2007,
+  "N": 300,
+  "M": 4,
+  "K": 5,
+  "L_reg_slack": 5,
+  "n_total": 314,
+  "qubo_file_used": "qubo_Q_S2_risk_adjusted_N300.npz",
+  "energy_greedy": -2860801975.910206,
+  "energy_sa_best": -2851638688.7655425,
+  "objective_raw_greedy": 8187932.216176051,
+  "objective_raw_sa_best": 17351219.360839553,
+  "greedy_runtime_sec": 0.8046224000863731,
+  "sa_runtime_sec": 31.501204000087455,
+  "total_classical_runtime_sec": 32.30582640017383,
+  "solvers": {
+    "greedy": {
+      "energy_total": -2860801975.910206,
+      "raw_objective": 8187932.216176051,
+      "decoded": {
+        "chosen_deductible_band": 2,
+        "chosen_premium_band": 4,
+        "selected_features_count": 28,
+        "selected_feature_ids": [
+          4,
+          7,
+          20,
+          25,
+          30,
+          42,
+          48,
+          58,
+          72,
+          84,
+          91,
+          100,
+          112,
+          123,
+          143,
+          150,
+          159,
+          171,
+          175,
+          196,
+          201,
+          219,
+          224,
+          238,
+          241,
+          264,
+          273,
+          282
+        ],
+        "selected_reg_features_count": 28
+      },
+      "violations": {
+        "onehot_y": 0.0,
+        "onehot_z": 0.0,
+        "reg_shortfall": 0.0,
+        "affordability_indicator": 0.0
+      },
+      "penalty_energy": {
+        "penE_onehot": 0.0,
+        "penE_reg": 0.0,
+        "penE_afford": 0.0,
+        "penE_total": 0.0
+      },
+      "constraint_checks": {
+        "onehot_ok": true,
+        "reg_satisfied": true,
+        "reg_violation_amount": 0,
+        "affordability_enabled": false,
+        "affordability_disallow_bands": [],
+        "affordability_satisfied": true,
+        "affordability_violation": false,
+        "is_feasible": true
+      },
+      "feasibility_margin": {
+        "onehot_worst_violation": 0.0,
+        "reg_shortfall": 0.0,
+        "affordability_violated": false
+      },
+      "qubo_terms_signed": {
+        "qterm_onehot_signed": -3930123.1618169625,
+        "qterm_reg_signed": -2865059784.9645658,
+        "qterm_afford_signed": 0.0,
+        "qterm_total_signed": -2868989908.126383
+      },
+      "penalty_weights": {
+        "A_onehot": 1965061.5809084813,
+        "B_reg": 3930123.1618169625,
+        "D_afford": 0.0
+      },
+      "energy_decomposition_check": {
+        "reconstructed_energy": -2860801975.910207,
+        "absolute_error": 9.5367431640625e-07,
+        "relative_error": 3.333590805783838e-16,
+        "validation_passed": true
+      },
+      "params": {
+        "multistart": true,
+        "num_starts": 20,
+        "random_seed": 210191104
+      }
+    },
+    "sa": {
+      "energy_total": -2851638688.7655425,
+      "raw_objective": 17351219.360839553,
+      "decoded": {
+        "chosen_deductible_band": 2,
+        "chosen_premium_band": 5,
+        "selected_features_count": 60,
+        "selected_feature_ids": [
+          4,
+          7,
+          14,
+          17,
+          19,
+          20,
+          30,
+          37,
+          38,
+          41,
+          44,
+          47,
+          51,
+          58,
+          59,
+          72,
+          82,
+          88,
+          91,
+          100,
+          114,
+          121,
+          123,
+          130,
+          138,
+          150,
+          153,
+          154,
+          155,
+          156,
+          159,
+          165,
+          169,
+          170,
+          171,
+          175,
+          184,
+          191,
+          195,
+          196,
+          201,
+          205,
+          212,
+          213,
+          219,
+          221,
+          223,
+          224,
+          233,
+          238,
+          240,
+          241,
+          248,
+          259,
+          264,
+          273,
+          278,
+          282,
+          295,
+          298
+        ],
+        "selected_reg_features_count": 27
+      },
+      "violations": {
+        "onehot_y": 0.0,
+        "onehot_z": 0.0,
+        "reg_shortfall": 0.0,
+        "affordability_indicator": 0.0
+      },
+      "penalty_energy": {
+        "penE_onehot": 0.0,
+        "penE_reg": 0.0,
+        "penE_afford": 0.0,
+        "penE_total": 0.0
+      },
+      "constraint_checks": {
+        "onehot_ok": true,
+        "reg_satisfied": true,
+        "reg_violation_amount": 0,
+        "affordability_enabled": false,
+        "affordability_disallow_bands": [],
+        "affordability_satisfied": true,
+        "affordability_violation": false,
+        "is_feasible": true
+      },
+      "feasibility_margin": {
+        "onehot_worst_violation": 0.0,
+        "reg_shortfall": 0.0,
+        "affordability_violated": false
+      },
+      "qubo_terms_signed": {
+        "qterm_onehot_signed": -3930123.1618169625,
+        "qterm_reg_signed": -2865059784.9645658,
+        "qterm_afford_signed": 0.0,
+        "qterm_total_signed": -2868989908.126383
+      },
+      "penalty_weights": {
+        "A_onehot": 1965061.5809084813,
+        "B_reg": 3930123.1618169625,
+        "D_afford": 0.0
+      },
+      "energy_decomposition_check": {
+        "reconstructed_energy": -2851638688.7655435,
+        "absolute_error": 9.5367431640625e-07,
+        "relative_error": 3.3443027693634285e-16,
+        "validation_passed": true
+      },
+      "params": {
+        "sa_T0": 34277481.07355523,
+        "sa_Tend": 34277.48107355523,
+        "sa_auto_temperature": true,
+        "sa_move_probs": {
+          "premium": 0.075,
+          "deductible": 0.075,
+          "flip_other": 0.8500000000000001
+        },
+        "multistart": true,
+        "num_starts": 20,
+        "start_seed_policy": "seed_for_start = (base_seed*104729 + start_id*7919) mod 2^32",
+        "random_seed_policy": "solver_rng_tied_to_instance_seed",
+        "random_seed": 210191105,
+        "convergence": {
+          "best_found_at_step": 39999,
+          "convergence_fraction": 0.999975,
+          "converged_early": false
+        },
+        "post_sa_hard_onehot_repair": true
+      }
+    }
+  }
+}

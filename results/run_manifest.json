@@ -1,0 +1,122 @@
+{
+  "run_started_utc": "2026-03-06T15:13:15.602337Z",
+  "project_root": "C:\\Users\\HP\\insurance-quantum",
+  "git_hash": "6891264",
+  "python": "3.14.2 (tags/v3.14.2:df79316, Dec  5 2025, 17:18:21) [MSC v.1944 64 bit (AMD64)]",
+  "numpy": "2.4.2",
+  "pandas": "3.0.0",
+  "plan_path": "C:\\Users\\HP\\insurance-quantum\\config\\experiment_plan.yaml",
+  "plan": {
+    "feature_sizes": [
+      20,
+      30,
+      40,
+      50,
+      60,
+      100,
+      150,
+      200,
+      300
+    ],
+    "seeds": {
+      "core_count": 20,
+      "stress_count": 10,
+      "extended_stress_count": 5,
+      "core_seed_start": 1000,
+      "stress_seed_start": 2000,
+      "extended_stress_seed_start": 3000
+    },
+    "scenarios": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "solver": {
+      "sa_steps": 40000,
+      "sa_T0": 5.0,
+      "sa_Tend": 0.01,
+      "sa_auto_temperature": false,
+      "greedy_num_starts": 20,
+      "sa_multistart": true,
+      "sa_num_starts": 20
+    },
+    "gurobi_policy": {
+      "run_if_N_leq": 200,
+      "time_limit_sec": 3600,
+      "mip_gap": 0.0,
+      "quiet": true
+    },
+    "notes": {
+      "purpose": "Single-run hybrid experiment (microdata-derived c and Sigma; QUBO consistent across solvers).",
+      "seed_generation": "Seed folders are generated once per seed at N_required=max(feature_sizes) for that regime.",
+      "reproducibility": "All solver budgets are fixed across N; Gurobi uses time-limit and reports incumbent gap."
+    },
+    "extended_exactness": {
+      "enabled": true,
+      "scenarios": [
+        1,
+        4
+      ],
+      "feature_sizes": [
+        150,
+        200,
+        300
+      ],
+      "seed_regime": "stress",
+      "seed_count": 3,
+      "gurobi_time_limit": 7200,
+      "gurobi_mip_gap": 0.0,
+      "gurobi_quiet": true
+    }
+  },
+  "cli_args": {
+    "fresh": false,
+    "robustness": true,
+    "gurobi_max_N": 100,
+    "gurobi_time_limit": 3600,
+    "gurobi_mip_gap": 0.0,
+    "gurobi_quiet": false,
+    "auto_generate_seed_data": true,
+    "extract_parameters": true,
+    "include_sensitivity": false,
+    "sens_N": [
+      50,
+      100
+    ],
+    "sens_seed_count": 5,
+    "sens_factors": [
+      0.9,
+      1.1
+    ],
+    "sens_params": [
+      "A_onehot",
+      "B_reg",
+      "affordability_multiplier",
+      "lambda_risk"
+    ],
+    "include_extended_exactness": false,
+    "exact_scenarios": [
+      1,
+      4
+    ],
+    "exact_N": [
+      150,
+      200,
+      300
+    ],
+    "exact_seed_count": 5,
+    "exact_time_limit": 7200,
+    "exact_mip_gap": 0.0,
+    "sa_auto_temperature_effective": true
+  },
+  "design": {
+    "mode": "robustness",
+    "seed_master_generation": {
+      "N_master_core": 0,
+      "N_master_stress": 300,
+      "note": "Each seed is generated once at its regime master N. Smaller N instances use prefix truncation at the build_qubo stage."
+    }
+  },
+  "run_finished_utc": "2026-03-06T15:35:27.088994Z"
+}

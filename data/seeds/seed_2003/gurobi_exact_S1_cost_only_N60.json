@@ -1,0 +1,78 @@
+{
+  "timestamp_utc": "2026-02-12T03:40:52.823689Z",
+  "scenario": "S1_cost_only",
+  "seed": 2003,
+  "N": 60,
+  "M": 4,
+  "K": 5,
+  "L_reg_slack": 3,
+  "status": {
+    "code": 2,
+    "name": "OPTIMAL"
+  },
+  "objective_reported": -29706772.153380074,
+  "energy_total": -29706772.15338008,
+  "raw_objective": 2937.3758769923124,
+  "violations": {
+    "onehot_y": 0.0,
+    "onehot_z": 0.0,
+    "reg_shortfall": 0.0,
+    "affordability_indicator": 0.0
+  },
+  "penalty_energy": {
+    "penE_onehot": 0.0,
+    "penE_reg": 0.0,
+    "penE_afford": 0.0,
+    "penE_total": 0.0
+  },
+  "constraint_checks": {
+    "onehot_ok": true,
+    "reg_satisfied": true,
+    "reg_violation_amount": 0,
+    "affordability_enabled": false,
+    "affordability_disallow_bands": [],
+    "affordability_satisfied": true,
+    "affordability_violation": false,
+    "is_feasible": true
+  },
+  "feasibility_margin": {
+    "onehot_worst_violation": 0.0,
+    "reg_shortfall": 0.0,
+    "affordability_violated": false
+  },
+  "qubo_terms_signed": {
+    "qterm_onehot_signed": -802965.1224123534,
+    "qterm_reg_signed": -28906744.406844724,
+    "qterm_afford_signed": 0.0,
+    "qterm_total_signed": -29709709.529257078
+  },
+  "penalty_weights": {
+    "A_onehot": 401482.5612061767,
+    "B_reg": 802965.1224123534,
+    "D_afford": 0.0
+  },
+  "energy_decomposition_check": {
+    "reconstructed_energy": -29706772.153380085,
+    "absolute_error": 3.725290298461914e-09,
+    "relative_error": 1.2540205577461383e-16,
+    "validation_passed": true
+  },
+  "mip_gap": 0.0,
+  "runtime_sec": 0.03369330000000004,
+  "gurobi_runtime_sec": 0.03399991989135742,
+  "decoded": {
+    "chosen_deductible_band": 1,
+    "chosen_premium_band": 5,
+    "selected_features_count": 6,
+    "selected_reg_features_count": 6
+  },
+  "files_used": {
+    "index_map": "C:\\Users\\HP\\insurance-quantum\\data\\seeds\\seed_2003\\index_map_S1_cost_only_N60.json",
+    "qubo": "C:\\Users\\HP\\insurance-quantum\\data\\seeds\\seed_2003\\qubo_Q_S1_cost_only_N60.npz",
+    "seed_dir": "C:\\Users\\HP\\insurance-quantum\\data\\seeds\\seed_2003"
+  },
+  "note": "Gurobi solves the same penalized QUBO objective as greedy and SA, with hard one-hot constraints for comparability.",
+  "gurobi_modeling": {
+    "enforce_onehot": true
+  }
+}

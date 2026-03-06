@@ -1,0 +1,52 @@
+{
+  "generated_at_utc": "2026-02-12T03:02:17.114870Z",
+  "seed": 1008,
+  "N_generated_master": 300,
+  "prefix_consistent": true,
+  "population": {
+    "num_members": 20000,
+    "coverage_months": 12
+  },
+  "risk_score": {
+    "distribution": "lognormal",
+    "mean": 0.0,
+    "sigma": 0.8
+  },
+  "claims_frequency": {
+    "base_lambda": 6.0
+  },
+  "claims_severity": {
+    "distribution": "lognormal",
+    "sigma": 1.2,
+    "mean_amount_target": 1200.0
+  },
+  "feature_catalog": {
+    "categories": 12,
+    "two_categories_per_feature": true,
+    "impact_factor_range": [
+      0.6,
+      1.0
+    ]
+  },
+  "qubo_generation_params": {
+    "c_lognormal_mean": 0.0,
+    "c_lognormal_sigma": 0.75,
+    "c_scale": 300.0,
+    "sigma_rank": 20,
+    "sigma_noise": 0.001,
+    "sigma_scale": 1.0,
+    "sigma_normalize_diag": true,
+    "regulatory_share": 0.15,
+    "regulatory_R_size": null
+  },
+  "notes": "Hybrid generator: claims + feature catalogue are generated for auditability, but c and Sigma are produced directly as controlled synthetic quantities. Master instance generated at N_max; smaller N are prefixes (slice c and Sigma; filter regulatory ids <= N).",
+  "extraction": {
+    "method": "claims_derived",
+    "seed": 1008,
+    "num_members": 20000,
+    "num_features": 300,
+    "num_categories": 12,
+    "sparsity_top_d": 6,
+    "epsilon": 1e-06
+  }
+}

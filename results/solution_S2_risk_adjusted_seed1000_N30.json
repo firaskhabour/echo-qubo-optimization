@@ -1,0 +1,162 @@
+{
+  "scenario": "S2_risk_adjusted",
+  "scenario_file": "config_qubo_S2.yaml",
+  "seed": 1000,
+  "N": 30,
+  "M": 4,
+  "K": 5,
+  "L_reg_slack": 2,
+  "n_total": 41,
+  "qubo_file_used": "qubo_Q_S2_risk_adjusted_N30.npz",
+  "energy_greedy": -2358412.9759372785,
+  "energy_sa_best": -2825813.988866644,
+  "raw_objective_greedy": 1630437.683390032,
+  "raw_objective_sa_best": 1163036.6704606663,
+  "greedy_runtime_sec": 0.030410699999999957,
+  "sa_runtime_sec": 21.022235799999997,
+  "total_classical_runtime_sec": 21.052646499999998,
+  "solvers": {
+    "greedy": {
+      "energy_total": -2358412.9759372785,
+      "raw_objective": 1630437.683390032,
+      "decoded": {
+        "chosen_deductible_band": 1,
+        "chosen_premium_band": 5,
+        "selected_features_count": 2,
+        "selected_feature_ids": [
+          8,
+          26
+        ],
+        "selected_reg_features_count": 2
+      },
+      "violations": {
+        "onehot_y": 0.0,
+        "onehot_z": 0.0,
+        "reg_shortfall": 1.0,
+        "affordability_indicator": 0.0
+      },
+      "penalty_energy": {
+        "penE_onehot": 0.0,
+        "penE_reg": 443205.6288141456,
+        "penE_afford": 0.0,
+        "penE_total": 443205.6288141456
+      },
+      "constraint_checks": {
+        "onehot_ok": true,
+        "reg_satisfied": false,
+        "reg_violation_amount": 1,
+        "affordability_enabled": false,
+        "affordability_disallow_bands": [],
+        "affordability_satisfied": true,
+        "affordability_violation": false,
+        "is_feasible": false
+      },
+      "feasibility_margin": {
+        "onehot_worst_violation": 0.0,
+        "reg_shortfall": 1.0,
+        "affordability_violated": false
+      },
+      "qubo_terms_signed": {
+        "qterm_onehot_signed": -443205.6288141456,
+        "qterm_reg_signed": -3545645.0305131646,
+        "qterm_afford_signed": 0.0,
+        "qterm_total_signed": -3988850.65932731
+      },
+      "penalty_weights": {
+        "A_onehot": 221602.8144070728,
+        "B_reg": 443205.6288141456,
+        "D_afford": 0.0
+      },
+      "energy_decomposition_check": {
+        "reconstructed_energy": -2358412.975937278,
+        "absolute_error": 4.656612873077393e-10,
+        "relative_error": 1.9744688146598945e-16,
+        "validation_passed": true
+      },
+      "params": {
+        "multistart": true,
+        "num_starts": 20,
+        "random_seed": 104729001
+      }
+    },
+    "sa": {
+      "energy_total": -2825813.988866644,
+      "raw_objective": 1163036.6704606663,
+      "decoded": {
+        "chosen_deductible_band": 4,
+        "chosen_premium_band": 5,
+        "selected_features_count": 2,
+        "selected_feature_ids": [
+          8,
+          16
+        ],
+        "selected_reg_features_count": 2
+      },
+      "violations": {
+        "onehot_y": 0.0,
+        "onehot_z": 0.0,
+        "reg_shortfall": 1.0,
+        "affordability_indicator": 0.0
+      },
+      "penalty_energy": {
+        "penE_onehot": 0.0,
+        "penE_reg": 443205.6288141456,
+        "penE_afford": 0.0,
+        "penE_total": 443205.6288141456
+      },
+      "constraint_checks": {
+        "onehot_ok": true,
+        "reg_satisfied": false,
+        "reg_violation_amount": 1,
+        "affordability_enabled": false,
+        "affordability_disallow_bands": [],
+        "affordability_satisfied": true,
+        "affordability_violation": false,
+        "is_feasible": false
+      },
+      "feasibility_margin": {
+        "onehot_worst_violation": 0.0,
+        "reg_shortfall": 1.0,
+        "affordability_violated": false
+      },
+      "qubo_terms_signed": {
+        "qterm_onehot_signed": -443205.6288141456,
+        "qterm_reg_signed": -3545645.0305131646,
+        "qterm_afford_signed": 0.0,
+        "qterm_total_signed": -3988850.65932731
+      },
+      "penalty_weights": {
+        "A_onehot": 221602.8144070728,
+        "B_reg": 443205.6288141456,
+        "D_afford": 0.0
+      },
+      "energy_decomposition_check": {
+        "reconstructed_energy": -2825813.988866644,
+        "absolute_error": 0.0,
+        "relative_error": 0.0,
+        "validation_passed": true
+      },
+      "params": {
+        "sa_steps": 40000,
+        "sa_T0": 5.0,
+        "sa_Tend": 0.01,
+        "sa_move_probs": {
+          "premium": 0.075,
+          "deductible": 0.075,
+          "flip_other": 0.8500000000000001
+        },
+        "multistart": true,
+        "num_starts": 20,
+        "start_seed_policy": "seed_for_start = (base_seed*104729 + start_id*7919) mod 2^32",
+        "random_seed_policy": "solver_rng_tied_to_instance_seed",
+        "random_seed": 104729002,
+        "convergence": {
+          "best_found_at_step": 97,
+          "convergence_fraction": 0.002425,
+          "converged_early": true
+        },
+        "post_sa_hard_onehot_repair": true
+      }
+    }
+  }
+}
