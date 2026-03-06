@@ -139,48 +139,45 @@ _MASTER_EXTRA = [
 # Automatic temperature scaling
 # ---------------------------------------------------------------------------
 
-def _auto_temperature(Q: np.ndarray, n_samples: int = 200,
+def _auto_temperature(Q: np.ndarray, n_samples: int = 200, 
                        seed: int = 42) -> tuple[float, float]:
     """
-    Derive T0 and Tend by directly measuring the mean absolute single-flip
-    energy change on Q.
-
-    Method: sample n_samples random (v, flip-at-i) pairs, compute |dE| for
-    each, and set T0 = mean|dE|.  This is exact by definition — ratio
-    T0/mean|dE| = 1.0 — and requires no structural assumptions about Q.
-
-    At T0 = mean|dE|:
-      P(accept uphill | dE = mean_dE) = exp(-1) ≈ 37%
-      Expected total acceptance ≈ 68%  (good exploration without random walk)
-
-    Previous formula (mean absolute row sum) overcounted for sparse QUBOs:
-      maxcut N=50:  row-sum T0=22.95 vs actual mean|dE|=3.70  (ratio 6.2x too hot)
-      portfolio N=50: row-sum T0=3051 vs actual mean|dE|=1595  (ratio 1.9x)
-
-    Tend = T0 * 1e-3  (cool to 0.1% of T0 over the full schedule).
-    Clamped to T0 >= 1.0 so Tend never underflows to zero.
+    Calibrate SA temperatures based on the QUBO's typical energy scale.
+    
+    RATIONALE:
+    To ensure Simulated Annealing (SA) is scale-aware across different problem 
+    sizes (N=50 to 300), we measure the 'typical' cost of a single bit-flip. 
+    By setting T0 = mean(|ΔE|), we ensure that an 'average' uphill move is 
+    accepted with probability P = exp(-1) ≈ 37% at the start.
+    
+    METHODOLOGY:
+    1. Sample 'n_samples' random binary states 'v'.
+    2. For each state, perform a random single-bit flip to state 'vn'.
+    3. Calculate the absolute energy difference |E(vn) - E(v)|.
+    4. T0 is the mean of these differences, ensuring the 'Ratio' diagnostic 
+       (T0 / mean|ΔE|) equals 1.0 by definition.
+    5. Tend is set to 0.1% of T0 to allow for final-stage exploitation.
     """
     N   = Q.shape[0]
     rng = np.random.default_rng(seed)
-    des = []
-    for _ in range(n_samples):
+    des: List[float] = []
+
+    for _ in range(int(n_samples)):
         v  = rng.integers(0, 2, size=N).astype(float)
         i  = int(rng.integers(0, N))
         vn = v.copy(); vn[i] = 1.0 - vn[i]
+        # Energy calculation: v^T Q v
         de = abs(float(vn @ Q @ vn) - float(v @ Q @ v))
         des.append(de)
-        # Auto-calibrate temperature to the *actual* single-flip scale of this Q.
-        # NOTE: The previous clamp T0>=1.0 breaks families whose typical |dE| < 1
-        # (e.g., spectral_dense), forcing T0=1 and making SA a near-random walk.
-        T0 = float(np.mean(des))
 
-        # Numerical safety only (do NOT distort scaling):
-        # - Ensure strictly positive so exp(-dE/T) never divides by zero.
-        # - Keep Tend away from 0 to avoid underflow.
-        T0 = max(T0, 1e-9)
-        Tend = max(T0 * 1e-3, 1e-12)
+    # Statistical mean of energy scale
+    T0 = float(np.mean(des)) if des else 1e-9
 
-        return T0, Tend
+    # Numerical safety: prevent division by zero or underflow in exp(-dE/T)
+    T0   = max(T0, 1e-9)
+    Tend = max(T0 * 1e-3, 1e-12)
+
+    return T0, Tend
 
 
 

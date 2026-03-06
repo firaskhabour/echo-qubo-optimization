@@ -78,6 +78,28 @@ def energy(Q: np.ndarray, v: np.ndarray) -> float:
     """Evaluate QUBO energy: E(v) = v^T Q v."""
     return float(v @ Q @ v)
 
+def auto_temperature(Q: np.ndarray, n_samples: int = 200, seed: int = 42) -> Tuple[float, float]:
+    """
+    Auto-calibrate SA temperatures for the Primary Insurance QUBO.
+    
+    NOTE: This is OFF by default to preserve the fixed T0=5.0 baseline 
+    stated in Section 4.2 of the paper. When enabled via YAML, it 
+    aligns the insurance solver's energy scale with the benchmark suite.
+    """
+    n = int(Q.shape[0])
+    rng = np.random.default_rng(seed)
+    des = []
+    for _ in range(int(n_samples)):
+        v = rng.integers(0, 2, size=n).astype(float)
+        i = int(rng.integers(0, n))
+        vn = v.copy(); vn[i] = 1.0 - vn[i]
+        de = abs(float(vn @ Q @ vn) - float(v @ Q @ v))
+        des.append(de)
+    
+    T0 = float(np.mean(des)) if des else 1e-9
+    T0 = max(T0, 1e-9)
+    Tend = max(T0 * 1e-3, 1e-12)
+    return float(T0), float(Tend)
 
 def project_onehot(v: np.ndarray, N: int, M: int, K: int,
                    rng: np.random.Generator) -> np.ndarray:
@@ -741,9 +763,21 @@ def main():
             num_starts_greedy = 100
 
     # SA parameters (Section 4.2, item 2)
-    steps  = int(solver_cfg.get("sa_steps", 40000))
-    T0     = float(solver_cfg.get("sa_T0",   5.0))
-    Tend   = float(solver_cfg.get("sa_Tend", 0.01))
+    # --- UPDATED SA PARAMETERS (Addressing Reviewer Feedback) ---
+    steps = int(solver_cfg.get("sa_steps", 40000))
+
+    # Default: fixed temperatures (5.0 -> 0.01) as stated in the paper baseline.
+    # Optional: enable scale-aware auto-temperature for robustness tests.
+    sa_auto_temp = bool(solver_cfg.get("sa_auto_temperature", False))
+
+    if sa_auto_temp:
+        # Use the auto_temperature helper to measure the energy scale |dE|.
+        # Seed is tied to the instance for full reproducibility.
+        T0, Tend = auto_temperature(Q, n_samples=200, seed=int(SEED) * 104729 + 4242)
+    else:
+        # Paper Baseline
+        T0   = float(solver_cfg.get("sa_T0",   5.0))
+        Tend = float(solver_cfg.get("sa_Tend", 0.01))
 
     sa_multistart  = bool(solver_cfg.get("sa_multistart", True))
     sa_num_starts_cfg = solver_cfg.get("sa_num_starts", None)
@@ -847,9 +881,9 @@ def main():
             },
             "sa": sa_pack | {
                 "params": {
-                    "sa_steps": int(steps),
                     "sa_T0":    float(T0),
                     "sa_Tend":  float(Tend),
+                    "sa_auto_temperature": bool(sa_auto_temp), # Added for auditability
                     "sa_move_probs": {
                         "premium":    float(prem_prob),
                         "deductible": float(ded_prob),

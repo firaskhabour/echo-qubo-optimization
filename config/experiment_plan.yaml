@@ -37,6 +37,7 @@ solver:
   sa_steps: 40000
   sa_T0: 5.0
   sa_Tend: 0.01
+  sa_auto_temperature: false # Set to false for paper consistency
 
   # multistart budgets
   greedy_num_starts: 20

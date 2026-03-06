@@ -2,7 +2,7 @@
 PROJECT DUMP (TREE + SELECTED CONTENT)
 ==============================================================================================================
 Root:      C:\Users\HP\insurance-quantum
-Generated: 2026-03-06 06:15:23.219511
+Generated: 2026-03-06 06:30:37.637239
 Content export:
   - .py/.yaml/.yml full content
   - CSV header only for CSV under results/
