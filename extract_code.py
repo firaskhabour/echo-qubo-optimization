@@ -37,7 +37,7 @@ EXCLUDE_DIRS = {
     ".mypy_cache",
     ".pytest_cache",
     "node_modules",
-    "xsrc"
+    "tables"
 }
 
 EXPORT_SOURCE_EXTS = {".py", ".yaml", ".yml"}

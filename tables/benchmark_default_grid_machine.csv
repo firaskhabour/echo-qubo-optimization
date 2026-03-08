@@ -1,0 +1,4 @@
+family,default_N_list,default_seed_range,default_seed_count,default_instance_count,notes,default_instance_count_per_kappa,default_kappa_list,default_total_instance_count
+maxcut,"[50,100,150,200,300]",1000-1019,20,100.0,5 N values x 20 seeds,,,
+portfolio_card,"[50,100,150,200,300]",1000-1019,20,100.0,5 N values x 20 seeds,,,
+spectral_dense,"[100,200,300]",1000-1019,20,,3 N values x 20 seeds x 3 kappa values,60.0,"[1e2,1e4,1e6]",180.0

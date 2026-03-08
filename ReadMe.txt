@@ -597,9 +597,86 @@ reported in the manuscript remain consistent when the annealing
 temperature is scaled automatically with the QUBO energy magnitude.
 
 ====================================================================
-CONTACT
+22. TABLES DIRECTORY
+====================================================================
+
+The repository includes a folder containing machine-readable tables
+that document the experimental configuration used in the study.
+
+Folder location:
+
+   tables/
+
+These files provide structured descriptions of solver settings,
+QUBO model parameters, and experiment grids used to generate the
+results reported in the manuscript.
+
+--------------------------------------------------------------------
+Machine-readable tables
+--------------------------------------------------------------------
+
+solver_parameters_machine.csv
+
+   Solver configuration parameters including evaluation budgets,
+   restart policies, and temperature schedules for:
+
+      • Greedy
+      • Simulated Annealing (SA)
+      • ECHO-SA
+
+insurance_qubo_parameters_machine.csv
+
+   Parameters used in constructing the structured insurance QUBO
+   model, including penalty scaling and decision variable structure.
+
+insurance_experiment_grid_machine.csv
+
+   Defines the experiment grid for the insurance QUBO study
+   including scenario definitions, problem sizes, and seed ranges.
+
+insurance_experiment_grid_detailed_machine.csv
+
+   Expanded instance list where each row represents one experiment
+   defined by (scenario, N, seed).
+
+benchmark_default_grid_machine.csv
+
+   Default experiment grids used for benchmark QUBO families
+   (MaxCut, Portfolio, Spectral-dense).
+
+benchmark_generator_parameters_machine.csv
+
+   Parameters used when generating benchmark QUBO instances.
+
+--------------------------------------------------------------------
+Human-readable reference
+--------------------------------------------------------------------
+
+parameter_reference_human.txt
+
+   A formatted summary of the experimental configuration provided
+   for quick reference.
+
+--------------------------------------------------------------------
+Purpose
+--------------------------------------------------------------------
+
+These tables provide transparency and reproducibility of the
+experimental setup without requiring inspection of the source code.
+
+====================================================================
+ARCHIVED VERSION (DOI)
+====================================================================
+
+Permanent archive of this repository:
+
+https://doi.org/10.6084/m9.figshare.31562455
+
+====================================================================
+23. CONTACT
 ====================================================================
 
 Firas F. Khabour
 Innovestor DMCC
 Dubai, UAE
+firas.khabour@gmail.com

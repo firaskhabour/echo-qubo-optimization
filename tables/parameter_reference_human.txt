@@ -1,0 +1,159 @@
+====================================================================================================
+EJOR PARAMETER REFERENCE
+====================================================================================================
+
+Source: project_dump.txt (uploaded code dump)
+Purpose: human-readable reference companion to the machine CSV files.
+
+----------------------------------------------------------------------------------------------------
+1. BASELINE INSURANCE EXPERIMENT GRID (SOURCE OF TRUTH = CODE IMPLEMENTATION)
+----------------------------------------------------------------------------------------------------
+Scenarios            : S1_cost_only, S2_risk_adjusted, S3_tight_regulation, S4_affordability
+Feature sizes (N)    : [20, 30, 40, 50, 60, 100, 150, 200, 300]
+Seed policy in YAML  : core_count=20 (start 1000), stress_count=10 (start 2000), extended_stress_count=5 (start 3000)
+Seed policy in runner: N <= 50 uses core_count; N > 50 uses stress_count.
+Master generation N  : core=50, stress=300
+Implemented baseline runs total: 520
+
+IMPORTANT NOTE
+  experiment_plan.yaml defines extended_stress_count = 5, but run_baseline_full.py
+  actually uses stress_count = 10 for all N > 50. Therefore the implemented
+  baseline grid is 520 runs (not 460).
+
+Scenario 1: S1_cost_only
+  lambda_risk            : 0.0
+  use_tight_regulation   : False
+  affordability_enabled  : False
+  premium_bands          : [1200, 1400, 1500, 1800, 2000]
+  deductible_bands       : [0, 150, 300, 600]
+  penalties              : scale_factor=10.0, onehot_multiplier=0.5, reg_multiplier=1.0
+
+Scenario 2: S2_risk_adjusted
+  lambda_risk            : 0.1
+  use_tight_regulation   : False
+  affordability_enabled  : False
+  premium_bands          : [1200, 1400, 1500, 1800, 2000]
+  deductible_bands       : [0, 150, 300, 600]
+  penalties              : scale_factor=10.0, onehot_multiplier=0.5, reg_multiplier=1.0
+
+Scenario 3: S3_tight_regulation
+  lambda_risk            : 0.0
+  use_tight_regulation   : True
+  affordability_enabled  : False
+  premium_bands          : [1200, 1400, 1500, 1800, 2000]
+  deductible_bands       : [0, 150, 300, 600]
+  penalties              : scale_factor=10.0, onehot_multiplier=0.5, reg_multiplier=1.0
+
+Scenario 4: S4_affordability
+  lambda_risk            : 0.0
+  use_tight_regulation   : False
+  affordability_enabled  : True
+  premium_bands          : [1200, 1400, 1500, 1800, 2000]
+  deductible_bands       : [0, 150, 300, 600]
+  penalties              : scale_factor=10.0, onehot_multiplier=0.5, reg_multiplier=1.0
+
+----------------------------------------------------------------------------------------------------
+2. CLASSICAL BASELINE SOLVERS
+----------------------------------------------------------------------------------------------------
+Greedy starts           : 20
+SA multistart           : True
+SA starts               : 20
+SA steps per start      : 40000
+SA total budget         : 800,000 steps
+SA temperature schedule : T0=5.0 -> Tend=0.01
+SA auto temperature     : False
+Move probabilities      : feature bit flip=0.85, deductible change=0.075, premium change=0.075
+Projection rule         : one-hot projection enforced after every proposed move
+
+Gurobi baseline policy
+  run_if_N_leq          : 200
+  time_limit_sec        : 3600
+  mip_gap               : 0.0
+  quiet                 : True
+
+Extended exactness block
+  enabled               : True
+  scenarios             : [1, 4]
+  feature_sizes         : [150, 200, 300]
+  seed_regime           : stress
+  seed_count            : 3
+  gurobi_time_limit_sec : 7200
+
+----------------------------------------------------------------------------------------------------
+3. ECHO DEFAULTS
+----------------------------------------------------------------------------------------------------
+Homotopy family         : Q(t) = Q_base + t*Q_penalties + tau0*(1-t)^2 * I
+Initial smoothing       : tau0 = percentile * eig_range(Q_penalties), clamped to [100, 1e6]
+Smoothing percentile    : 0.25
+Max stages              : 8
+Candidate t samples     : 51
+Stage selection         : choose the largest spectral-change points plus endpoints 0 and 1
+Budget score            : kappa(Q(t)) * sqrt(n_neg(Q(t)) + 1)
+Minimum stage budget    : 5,000
+Total ECHO budget       : 800,000
+Beam sizing             :
+  kappa > 1000 -> 40
+  kappa > 100  -> 30
+  kappa > 10   -> 20
+  kappa <= 10  -> 10
+Within-stage SA         : T0=5.0, Tend=0.01, initial_restarts=40
+
+----------------------------------------------------------------------------------------------------
+4. INSURANCE QUBO CONSTRUCTION
+----------------------------------------------------------------------------------------------------
+Variable order          : [x_1..x_N | y_1..y_M | z_1..z_K | t_0..t_{L-1}]
+Economic objective      : min sum_i c_i x_i + lambda_risk*x^T Sigma x - sum_k P_k z_k
+One-hot penalty         : weight * (1 - sum_i v_i)^2
+Regulatory penalty      : (sum_{i in R} x_i - sum_l 2^l t_l - Rmin)^2
+Slack bits              : L = ceil(log2(Rmin + 1)) when Rmin > 0, else 0
+Penalty scaling base    : A_base = scale_factor * C_scale
+A (one-hot)             : A_base * onehot_multiplier
+B (regulatory)          : A_base * reg_multiplier
+D (affordability)       : disallow_penalty_multiplier * A_base (when enabled)
+
+Global synthetic generation controls
+  c_lognormal_mean      : 0.0
+  c_lognormal_sigma     : 0.75
+  c_scale               : 300.0
+  sigma_rank            : 20
+  sigma_noise           : 0.001
+  sigma_normalize_diag  : True
+  sigma_scale           : 1.0
+
+----------------------------------------------------------------------------------------------------
+5. BENCHMARK DEFAULTS
+----------------------------------------------------------------------------------------------------
+Max-Cut
+  N list                : [50, 100, 150, 200, 300]
+  seeds                 : 1000..1019
+  edge_prob             : 0.5
+  edge weights          : Normal(0,1)
+  default instances     : 100
+
+Portfolio-cardinality
+  N list                : [50, 100, 150, 200, 300]
+  seeds                 : 1000..1019
+  k_frac                : 0.15
+  lambda_risk           : 1.0
+  scale_factor in runner: 10.0
+  note                  : generator docstring mentions 50.0, but runner default passes 10.0
+  default instances     : 100
+
+Spectral-dense
+  N list                : [100, 200, 300]
+  seeds                 : 1000..1019
+  kappa targets         : [1e2, 1e4, 1e6]
+  neg_frac              : 0.3
+  default instances     : 180
+
+----------------------------------------------------------------------------------------------------
+6. FILES IN THIS BUNDLE
+----------------------------------------------------------------------------------------------------
+  - benchmark_default_grid_machine.csv
+  - benchmark_generator_parameters_machine.csv
+  - insurance_experiment_grid_detailed_machine.csv
+  - insurance_experiment_grid_machine.csv
+  - insurance_qubo_parameters_machine.csv
+  - solver_parameters_machine.csv
+
+====================================================================================================
