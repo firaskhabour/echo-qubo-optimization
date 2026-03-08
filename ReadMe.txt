@@ -2,7 +2,8 @@
 ECHO QUBO OPTIMIZATION FRAMEWORK
 ====================================================================
 
-ECHO: Eigenvalue-guided Homotopy Optimization for QUBO
+Eigenvalue-Guided Homotopy Optimization 
+for Quadratic Unconstrained Binary Optimization 
 with Application to Health Insurance Plan Design
 
 
@@ -665,7 +666,38 @@ These tables provide transparency and reproducibility of the
 experimental setup without requiring inspection of the source code.
 
 ====================================================================
-ARCHIVED VERSION (DOI)
+23. REPLICATION PACKAGE
+====================================================================
+
+This repository serves as the replication package for the research
+article:
+
+   "ECHO: Eigenvalue-guided Homotopy Optimization for QUBO
+   with Application to Health Insurance Plan Design"
+
+The repository contains:
+
+   • full experiment source code
+   • configuration files
+   • experiment parameter tables
+   • benchmark generators
+   • solver implementations
+   • experiment runners
+   • output result files
+
+Running the experiment pipeline reproduces the computational results
+reported in the manuscript.
+
+All experiments are deterministic given:
+
+   • random seed
+   • scenario configuration
+   • solver parameters
+
+The repository therefore enables full reproduction of the study.
+
+====================================================================
+24. ARCHIVED VERSION (DOI)
 ====================================================================
 
 Permanent archive of this repository:
@@ -673,7 +705,7 @@ Permanent archive of this repository:
 https://doi.org/10.6084/m9.figshare.31562455
 
 ====================================================================
-23. CONTACT
+25. CONTACT
 ====================================================================
 
 Firas F. Khabour
